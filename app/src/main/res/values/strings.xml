@@ -1,0 +1,56 @@
+<resources>
+    <string name="app_name">InformationFatigue</string>
+
+    <!-- Onboarding -->
+    <string name="next">다음</string>
+    <string name="skip">건너뛰기</string>
+    <string name="done">완료</string>
+    <string name="open_settings">설정 열기</string>
+    <string name="step_icon">단계 아이콘</string>
+    <string name="permission_status">권한 상태</string>
+
+    <string name="onboarding_step1_title">사용 정보 접근 권한</string>
+    <string name="onboarding_step1_desc">앱 사용량 데이터를 수집하기 위해 사용 정보 접근 권한이 필요합니다.\n\n설정에서 InformationFatigue를 찾아 허용해주세요.</string>
+    <string name="onboarding_step2_title">알림 접근 권한</string>
+    <string name="onboarding_step2_desc">사용자가 클릭하거나 삭제한 알림 수를 수집하기 위해 알림 접근 권한이 필요합니다.\n\n설정에서 InformationFatigue를 찾아 허용해주세요.</string>
+    <string name="onboarding_step3_title">배터리 최적화 제외</string>
+    <string name="onboarding_step3_desc">5분 간격의 안정적인 데이터 수집을 위해 배터리 최적화에서 제외하는 것을 권장합니다.\n\n설정 > 배터리 > 배터리 최적화에서 InformationFatigue를 \'최적화하지 않음\'으로 변경해주세요.</string>
+    <string name="onboarding_step4_title">정확한 알람 권한</string>
+    <string name="onboarding_step4_desc">정확한 5분 간격 수집을 위해 정확한 알람 권한이 필요합니다.\n\n이 권한이 없으면 수집 간격이 정확하지 않을 수 있습니다.</string>
+    <string name="onboarding_step4_not_needed">이 기기에서는 별도의 설정이 필요하지 않습니다.</string>
+
+    <string name="step_format">%1$d / %2$d 단계</string>
+    <string name="permission_granted">허용됨</string>
+    <string name="permission_not_granted">허용되지 않음</string>
+
+    <!-- Main -->
+    <string name="service_running">데이터 수집 중</string>
+    <string name="service_stopped">수집 중지됨</string>
+    <string name="start">시작</string>
+    <string name="stop">중지</string>
+    <string name="export_csv">CSV 내보내기</string>
+    <string name="collection_log">수집 로그</string>
+    <string name="no_data">수집된 데이터가 없습니다</string>
+
+    <!-- Log item -->
+    <string name="screen_on_off_format">화면 ON: %1$d / OFF: %2$d</string>
+    <string name="screen_duration_format">켜짐 시간: %s</string>
+    <string name="max_consecutive_format">최대 연속: %s</string>
+    <string name="avg_app_format">앱 평균: %s</string>
+    <string name="app_switch_format">앱 전환: %d회</string>
+    <string name="distraction_format">산만도: %.2f</string>
+    <string name="unique_apps_format">고유앱: %d개</string>
+    <string name="notification_format">알림: %d건</string>
+    <string name="cumulative_format">누적: %s</string>
+
+    <!-- Notification channel -->
+    <string name="channel_name">데이터 수집 서비스</string>
+    <string name="channel_description">백그라운드 데이터 수집 알림</string>
+    <string name="notification_title">InformationFatigue</string>
+    <string name="notification_text">데이터를 수집하고 있습니다</string>
+
+    <!-- CSV -->
+    <string name="csv_exported">CSV 파일이 생성되었습니다</string>
+    <string name="csv_no_data">내보낼 데이터가 없습니다</string>
+    <string name="csv_share_title">데이터 내보내기</string>
+</resources>
