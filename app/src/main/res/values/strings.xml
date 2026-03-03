@@ -26,8 +26,8 @@
     <!-- Main -->
     <string name="service_running">데이터 수집 중</string>
     <string name="service_stopped">수집 중지됨</string>
-    <string name="start">시작</string>
-    <string name="stop">중지</string>
+    <string name="start">수집 시작</string>
+    <string name="stop">수집 중지</string>
     <string name="export_csv">CSV 내보내기</string>
     <string name="collection_log">수집 로그</string>
     <string name="no_data">수집된 데이터가 없습니다</string>
