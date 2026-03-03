@@ -60,4 +60,12 @@
     <string name="csv_exported">CSV 파일이 생성되었습니다</string>
     <string name="csv_no_data">내보낼 데이터가 없습니다</string>
     <string name="csv_share_title">데이터 내보내기</string>
+
+    <!-- Today summary card -->
+    <string name="today_summary_title">오늘 활동 요약</string>
+    <string name="today_summary_note">연속 4시간 sleep 이전 기준</string>
+    <string name="today_screen_time_label">누적 스크린 타임</string>
+    <string name="today_notif_label">총 알림 수</string>
+    <string name="today_notif_freq_label">알림 빈도</string>
+    <string name="today_app_switch_label">앱 전환 횟수</string>
 </resources>

@@ -8,11 +8,14 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -34,6 +37,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnToggleService: MaterialButton
     private lateinit var btnExport: MaterialButton
     private lateinit var btnHistory: MaterialButton
+
+    // Today summary views
+    private lateinit var tvTodayScreenTime: TextView
+    private lateinit var tvTodayNotifications: TextView
+    private lateinit var tvTodayNotifFreq: TextView
+    private lateinit var tvTodayAppSwitches: TextView
 
     private val handler = Handler(Looper.getMainLooper())
     private val countdownRunnable = object : Runnable {
@@ -69,6 +78,20 @@ class MainActivity : AppCompatActivity() {
         btnHistory = findViewById(R.id.btnHistory)
         recyclerView = findViewById(R.id.recyclerView)
 
+        // Today summary views
+        tvTodayScreenTime = findViewById(R.id.tvTodayScreenTime)
+        tvTodayNotifications = findViewById(R.id.tvTodayNotifications)
+        tvTodayNotifFreq = findViewById(R.id.tvTodayNotifFreq)
+        tvTodayAppSwitches = findViewById(R.id.tvTodayAppSwitches)
+
+        // Handle bottom navigation bar (edge-to-edge enforced on API 35+)
+        val rootLayout = findViewById<LinearLayout>(R.id.rootLayout)
+        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, bars.bottom)
+            insets
+        }
+
         // RecyclerView setup
         logAdapter = LogAdapter()
         recyclerView.layoutManager = LinearLayoutManager(this)
@@ -81,6 +104,14 @@ class MainActivity : AppCompatActivity() {
             if (records.isNotEmpty()) {
                 recyclerView.scrollToPosition(0)
             }
+        }
+
+        // Today summary
+        viewModel.todaySummary.observe(this) { summary ->
+            tvTodayScreenTime.text = formatDuration(summary.totalScreenTimeMs)
+            tvTodayNotifications.text = "${summary.totalNotifications}건"
+            tvTodayNotifFreq.text = "%.1f건/시간".format(summary.notifPerHour)
+            tvTodayAppSwitches.text = "${summary.totalAppSwitches}회"
         }
 
         // Service toggle
@@ -157,6 +188,20 @@ class MainActivity : AppCompatActivity() {
             ) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+    }
+
+    private fun formatDuration(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format("%dh %dm %ds", hours, minutes, seconds)
+        } else if (minutes > 0) {
+            String.format("%dm %ds", minutes, seconds)
+        } else {
+            String.format("%ds", seconds)
         }
     }
 }
