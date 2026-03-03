@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -13,7 +14,7 @@
         android:layout_margin="12dp"
         app:cardCornerRadius="12dp"
         app:cardElevation="2dp"
-        xmlns:app="http://schemas.android.com/apk/res-auto">
+        app:cardBackgroundColor="?attr/colorSurface">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -49,21 +50,50 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Export button -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnExport"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+    <!-- Countdown to next collection -->
+    <TextView
+        android:id="@+id/tvCountdown"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="4dp"
+        android:textSize="13sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:text="@string/countdown_stopped" />
+
+    <!-- Action buttons row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:layout_marginHorizontal="12dp"
-        android:layout_marginBottom="8dp"
-        android:text="@string/export_csv" />
+        android:layout_marginBottom="8dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExport"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="@string/export_csv" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnHistory"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="@string/all_history" />
+
+    </LinearLayout>
 
     <!-- Log list -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/collection_log"
+        android:text="@string/recent_log"
         android:textSize="16sp"
         android:textStyle="bold"
         android:textColor="?android:attr/textColorPrimary"
@@ -76,6 +106,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
-        android:padding="8dp" />
+        android:padding="8dp"
+        android:paddingBottom="80dp" />
 
 </LinearLayout>

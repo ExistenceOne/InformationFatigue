@@ -235,6 +235,11 @@ class ScreenEventTracker(private val context: Context) {
     }
 
     /**
+     * Returns true if the screen is currently ON (status 1).
+     */
+    fun isScreenOn(): Boolean = currentStatus == 1
+
+    /**
      * Prune events older than the given timestamp.
      */
     fun pruneEventsBefore(timestampMs: Long) {

@@ -49,6 +49,12 @@
             android:name=".ui.main.MainActivity"
             android:exported="false" />
 
+        <!-- History -->
+        <activity
+            android:name=".ui.history.HistoryActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.main.MainActivity" />
+
         <!-- Data collection foreground service -->
         <service
             android:name=".service.DataCollectionService"

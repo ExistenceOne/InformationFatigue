@@ -1,9 +1,12 @@
 package com.example.informationfatigue.ui.main
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
@@ -15,6 +18,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.informationfatigue.R
 import com.example.informationfatigue.service.DataCollectionService
+import com.example.informationfatigue.ui.history.HistoryActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 
@@ -26,8 +30,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusCard: MaterialCardView
     private lateinit var statusDot: View
     private lateinit var tvStatus: TextView
+    private lateinit var tvCountdown: TextView
     private lateinit var btnToggleService: MaterialButton
     private lateinit var btnExport: MaterialButton
+    private lateinit var btnHistory: MaterialButton
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val countdownRunnable = object : Runnable {
+        override fun run() {
+            updateCountdown()
+            handler.postDelayed(this, 1000L)
+        }
+    }
 
     // POST_NOTIFICATIONS permission launcher (API 33+)
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -49,8 +63,10 @@ class MainActivity : AppCompatActivity() {
         statusCard = findViewById(R.id.statusCard)
         statusDot = findViewById(R.id.statusDot)
         tvStatus = findViewById(R.id.tvStatus)
+        tvCountdown = findViewById(R.id.tvCountdown)
         btnToggleService = findViewById(R.id.btnToggleService)
         btnExport = findViewById(R.id.btnExport)
+        btnHistory = findViewById(R.id.btnHistory)
         recyclerView = findViewById(R.id.recyclerView)
 
         // RecyclerView setup
@@ -62,7 +78,6 @@ class MainActivity : AppCompatActivity() {
         viewModel = ViewModelProvider(this)[MainViewModel::class.java]
         viewModel.allRecords.observe(this) { records ->
             logAdapter.submitList(records)
-            // Scroll to top when new data arrives
             if (records.isNotEmpty()) {
                 recyclerView.scrollToPosition(0)
             }
@@ -86,11 +101,38 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        // History
+        btnHistory.setOnClickListener {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        }
     }
 
     override fun onResume() {
         super.onResume()
         updateServiceStatus()
+        handler.post(countdownRunnable)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        handler.removeCallbacks(countdownRunnable)
+    }
+
+    private fun updateCountdown() {
+        val nextMs = DataCollectionService.getNextCollectionTimeMs(this)
+        if (nextMs == 0L || !DataCollectionService.isRunning(this)) {
+            tvCountdown.text = getString(R.string.countdown_stopped)
+            return
+        }
+        val remainMs = nextMs - System.currentTimeMillis()
+        if (remainMs <= 0) {
+            tvCountdown.text = getString(R.string.countdown_format, 0, 0)
+            return
+        }
+        val minutes = (remainMs / 60_000).toInt()
+        val seconds = ((remainMs % 60_000) / 1000).toInt()
+        tvCountdown.text = getString(R.string.countdown_format, minutes, seconds)
     }
 
     private fun updateServiceStatus() {

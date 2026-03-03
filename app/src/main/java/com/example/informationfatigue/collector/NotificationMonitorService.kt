@@ -52,4 +52,12 @@ class NotificationMonitorService : NotificationListenerService() {
         super.onListenerConnected()
         // Service connected — nothing special needed
     }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        // Request system to rebind so we never miss background notification events
+        requestRebind(
+            android.content.ComponentName(this, NotificationMonitorService::class.java)
+        )
+    }
 }

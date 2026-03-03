@@ -33,9 +33,12 @@ class DataCollectionService : Service() {
         private const val FIVE_MIN_MS = 5 * 60 * 1000L
         private const val TEN_MIN_MS = 10 * 60 * 1000L
         const val ACTION_COLLECT = "com.example.informationfatigue.ACTION_COLLECT"
+        const val ACTION_START_FRESH = "com.example.informationfatigue.ACTION_START_FRESH"
 
         fun start(context: Context) {
-            val intent = Intent(context, DataCollectionService::class.java)
+            val intent = Intent(context, DataCollectionService::class.java).apply {
+                action = ACTION_START_FRESH
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -55,6 +58,11 @@ class DataCollectionService : Service() {
         fun isRunning(context: Context): Boolean {
             val prefs = context.getSharedPreferences("service_prefs", Context.MODE_PRIVATE)
             return prefs.getBoolean("is_running", false)
+        }
+
+        fun getNextCollectionTimeMs(context: Context): Long {
+            val prefs = context.getSharedPreferences("service_prefs", Context.MODE_PRIVATE)
+            return prefs.getLong("next_collection_time", 0L)
         }
     }
 
@@ -85,12 +93,17 @@ class DataCollectionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand action=${intent?.action}")
 
-        if (intent?.action == ACTION_COLLECT) {
-            performCollection()
+        when (intent?.action) {
+            ACTION_COLLECT -> {
+                saveNextCollectionTime()
+                performCollection()
+            }
+            ACTION_START_FRESH -> {
+                saveNextCollectionTime()
+                AlarmReceiver.scheduleNext(this)
+            }
+            // null = START_STICKY restart; alarm chain is maintained by AlarmReceiver
         }
-
-        // Schedule next alarm
-        scheduleNextAlarm()
 
         return START_STICKY
     }
@@ -98,6 +111,12 @@ class DataCollectionService : Service() {
     private fun performCollection() {
         scope.launch {
             try {
+                // Skip collection when screen is OFF
+                if (!screenTracker.isScreenOn()) {
+                    Log.d(TAG, "Screen is OFF, skipping collection")
+                    return@launch
+                }
+
                 val now = System.currentTimeMillis()
                 val windowStart = now - TEN_MIN_MS
 
@@ -121,7 +140,7 @@ class DataCollectionService : Service() {
 
                     // 4. Aggregate
                     val record = DataAggregator.aggregate(
-                        startTime = now - FIVE_MIN_MS, // the 5-min window start
+                        startTime = windowStart, // the 10-min window start
                         endTime = now,
                         screenSnapshot = screenSnapshot,
                         usageData = usageData,
@@ -146,33 +165,10 @@ class DataCollectionService : Service() {
         }
     }
 
-    private fun scheduleNextAlarm() {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pendingIntent = AlarmReceiver.getPendingIntent(this)
-        val triggerAt = System.currentTimeMillis() + FIVE_MIN_MS
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // API 31+: check if exact alarms are allowed
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
-                )
-            } else {
-                // Fallback to inexact alarm
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
-                )
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // API 23-30
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
-            )
-        } else {
-            alarmManager.setExact(
-                AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
-            )
-        }
+    private fun saveNextCollectionTime() {
+        val nextTime = System.currentTimeMillis() + FIVE_MIN_MS
+        getSharedPreferences("service_prefs", Context.MODE_PRIVATE)
+            .edit().putLong("next_collection_time", nextTime).apply()
     }
 
     private fun createNotificationChannel() {

@@ -22,7 +22,6 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.example.informationfatigue.R
-import com.example.informationfatigue.service.DataCollectionService
 import com.example.informationfatigue.ui.main.MainActivity
 import com.google.android.material.button.MaterialButton
 
@@ -151,10 +150,7 @@ class OnboardingActivity : AppCompatActivity() {
         // Mark onboarding as completed
         getSharedPreferences("onboarding_prefs", MODE_PRIVATE)
             .edit().putBoolean("completed", true).apply()
-
-        // Start collection service
-        DataCollectionService.start(this)
-
+        // Service is NOT started here — user must press Start in MainActivity
         goToMain()
     }
 

@@ -43,6 +43,13 @@
     <string name="notification_format">알림: %d건</string>
     <string name="cumulative_format">누적: %s</string>
 
+    <!-- Countdown & History -->
+    <string name="recent_log">최근 수집 로그</string>
+    <string name="all_history">전체 기록</string>
+    <string name="history">기록</string>
+    <string name="countdown_format">다음 수집까지: %1$d분 %2$d초</string>
+    <string name="countdown_stopped">수집이 중지되어 있습니다</string>
+
     <!-- Notification channel -->
     <string name="channel_name">데이터 수집 서비스</string>
     <string name="channel_description">백그라운드 데이터 수집 알림</string>
