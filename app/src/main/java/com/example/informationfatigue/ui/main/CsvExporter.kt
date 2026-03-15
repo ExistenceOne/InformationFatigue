@@ -18,19 +18,17 @@ object CsvExporter {
     private const val EXPORTS_DIR = "exports"
 
     private val CSV_HEADER = listOf(
-        "id",
-        "start_time",
-        "end_time",
-        "screen_on_count",
-        "screen_off_count",
-        "screen_on_duration_ms",
-        "max_consecutive_ms",
-        "avg_app_session_ms",
+        "device_id",
+        "screen_on_timestamp_unix",
+        "screen_on_timestamp_dt",
+        "screen_off_timestamp_unix",
+        "screen_off_timestamp_dt",
+        "off_and_on_gap",
         "app_switch_count",
-        "distraction_index",
-        "unique_apps_count",
-        "notification_interaction_count",
-        "cumulative_screen_time_ms"
+        "unique_app_count",
+        "app_duration_mean",
+        "app_duration_std",
+        "app_switch_per_hour"
     ).joinToString(",")
 
     /**
@@ -89,19 +87,17 @@ object CsvExporter {
 
     private fun recordToCsvLine(record: DataRecord): String {
         return listOf(
-            record.id,
-            record.start_time,
-            record.end_time,
-            record.screen_on_count,
-            record.screen_off_count,
-            record.screen_on_duration_ms,
-            record.max_consecutive_ms,
-            record.avg_app_session_ms,
+            record.device_id,
+            record.screen_on_timestamp_unix,
+            record.screen_on_timestamp_dt,
+            record.screen_off_timestamp_unix,
+            record.screen_off_timestamp_dt,
+            record.off_and_on_gap,
             record.app_switch_count,
-            record.distraction_index,
-            record.unique_apps_count,
-            record.notification_interaction_count,
-            record.cumulative_screen_time_ms
+            record.unique_app_count,
+            record.app_duration_mean,
+            record.app_duration_std,
+            record.app_switch_per_hour
         ).joinToString(",")
     }
 }

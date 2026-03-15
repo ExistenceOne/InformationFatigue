@@ -59,17 +59,6 @@
         android:textStyle="bold"
         android:text="@string/start" />
 
-    <!-- Countdown to next collection -->
-    <TextView
-        android:id="@+id/tvCountdown"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="4dp"
-        android:textSize="13sp"
-        android:textColor="?android:attr/textColorSecondary"
-        android:text="@string/countdown_stopped" />
-
     <!-- Today summary card -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/summaryCard"

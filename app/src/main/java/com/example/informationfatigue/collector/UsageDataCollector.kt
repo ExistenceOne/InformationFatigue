@@ -3,20 +3,23 @@ package com.example.informationfatigue.collector
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import kotlin.math.sqrt
 
 /**
  * Collects app usage data using UsageStatsManager.queryEvents().
- * Queries the last 10 minutes of events to compute:
+ * Queries events in [startTime, endTime] to compute:
  * - app_switch_count
- * - unique_apps_count
- * - avg_app_session_ms
+ * - unique_app_count
+ * - app_duration_mean (seconds)
+ * - app_duration_std  (seconds)
  */
 class UsageDataCollector(private val context: Context) {
 
     data class UsageData(
         val appSwitchCount: Int,
         val uniqueAppsCount: Int,
-        val avgAppSessionMs: Long
+        val avgAppSessionSec: Float,
+        val stdAppSessionSec: Float
     )
 
     private data class AppSession(
@@ -25,37 +28,28 @@ class UsageDataCollector(private val context: Context) {
         val endTime: Long
     )
 
-    /**
-     * Query usage events from [startTime, endTime] and compute aggregated data.
-     */
     fun collect(startTime: Long, endTime: Long): UsageData {
         val usageStatsManager =
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                ?: return UsageData(0, 0, 0L)
+                ?: return UsageData(0, 0, 0f, 0f)
 
         val events = usageStatsManager.queryEvents(startTime, endTime)
-            ?: return UsageData(0, 0, 0L)
+            ?: return UsageData(0, 0, 0f, 0f)
 
         val sessions = mutableListOf<AppSession>()
-        // Track the last RESUMED event per package
         val resumedMap = mutableMapOf<String, Long>()
-        // Track foreground app transitions for switch count
         val foregroundSequence = mutableListOf<String>()
 
         val event = UsageEvents.Event()
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
-
             val pkg = event.packageName ?: continue
-
             when (event.eventType) {
                 UsageEvents.Event.ACTIVITY_RESUMED -> {
-                    // Formerly MOVE_TO_FOREGROUND
                     resumedMap[pkg] = event.timeStamp
                     foregroundSequence.add(pkg)
                 }
                 UsageEvents.Event.ACTIVITY_PAUSED -> {
-                    // Formerly MOVE_TO_BACKGROUND
                     val start = resumedMap.remove(pkg)
                     if (start != null) {
                         sessions.add(AppSession(pkg, start, event.timeStamp))
@@ -64,34 +58,37 @@ class UsageDataCollector(private val context: Context) {
             }
         }
 
-        // Close any open sessions at the end time
+        // Close any open sessions at endTime
         for ((pkg, start) in resumedMap) {
             sessions.add(AppSession(pkg, start, endTime))
         }
 
-        // Unique apps
         val uniqueApps = sessions.map { it.packageName }.toSet()
 
-        // App switch count: number of times consecutive foreground apps differ
         var switchCount = 0
         for (i in 1 until foregroundSequence.size) {
-            if (foregroundSequence[i] != foregroundSequence[i - 1]) {
-                switchCount++
-            }
+            if (foregroundSequence[i] != foregroundSequence[i - 1]) switchCount++
         }
 
-        // Average app session duration
-        val totalSessionDuration = sessions.sumOf { it.endTime - it.startTime }
-        val avgSessionMs = if (sessions.isNotEmpty()) {
-            totalSessionDuration / sessions.size
+        val durationsMs = sessions.map { (it.endTime - it.startTime).toDouble() }
+        val avgSec = if (durationsMs.isNotEmpty()) {
+            (durationsMs.average() / 1000.0).toFloat()
         } else {
-            0L
+            0f
+        }
+        val stdSec = if (durationsMs.size > 1) {
+            val mean = durationsMs.average()
+            val variance = durationsMs.sumOf { (it - mean) * (it - mean) } / durationsMs.size
+            (sqrt(variance) / 1000.0).toFloat()
+        } else {
+            0f
         }
 
         return UsageData(
             appSwitchCount = switchCount,
             uniqueAppsCount = uniqueApps.size,
-            avgAppSessionMs = avgSessionMs
+            avgAppSessionSec = avgSec,
+            stdAppSessionSec = stdSec
         )
     }
 }

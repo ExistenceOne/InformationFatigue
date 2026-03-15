@@ -11,10 +11,10 @@ interface DataRecordDao {
     @Insert
     suspend fun insert(record: DataRecord)
 
-    @Query("SELECT * FROM data_records ORDER BY start_time DESC")
+    @Query("SELECT * FROM data_records ORDER BY screen_on_timestamp_unix DESC")
     fun getAllOrderedByTime(): LiveData<List<DataRecord>>
 
-    @Query("SELECT * FROM data_records ORDER BY start_time ASC")
+    @Query("SELECT * FROM data_records ORDER BY screen_on_timestamp_unix ASC")
     suspend fun getAll(): List<DataRecord>
 
     @Query("DELETE FROM data_records")

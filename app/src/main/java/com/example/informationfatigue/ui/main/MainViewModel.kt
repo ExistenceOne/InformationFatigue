@@ -11,9 +11,9 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 data class TodaySummary(
-    val totalScreenTimeMs: Long = 0L,
-    val totalNotifications: Int = 0,
-    val notifPerHour: Float = 0f,
+    val totalScreenTimeSec: Long = 0L,  // sum of off_and_on_gap (seconds)
+    val sessionCount: Int = 0,
+    val avgSwitchPerHour: Float = 0f,
     val totalAppSwitches: Int = 0
 )
 
@@ -31,44 +31,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        val todayStart = cal.timeInMillis
+        val todayStartSec = cal.timeInMillis / 1000
         val records = allList
-            .filter { it.start_time >= todayStart }
-            .sortedBy { it.start_time }
+            .filter { it.screen_on_timestamp_unix >= todayStartSec }
+            .sortedBy { it.screen_on_timestamp_unix }
         computeTodaySummary(records)
     }
 
     private fun computeTodaySummary(records: List<DataRecord>): TodaySummary {
         if (records.isEmpty()) return TodaySummary()
 
-        val fourHoursMs = 4 * 60 * 60 * 1000L
+        val fourHoursSec = 4 * 60 * 60L
 
-        // 가장 최근의 "연속 4시간 이상 screen-off 간격" 이후부터를 현재 세션으로 본다
+        // Find the latest "4 hour gap" boundary to define current session
         var sessionStartIndex = 0
         for (i in 0 until records.size - 1) {
-            val gap = records[i + 1].start_time - records[i].end_time
-            if (gap >= fourHoursMs) sessionStartIndex = i + 1
+            val gap = records[i + 1].screen_on_timestamp_unix - records[i].screen_off_timestamp_unix
+            if (gap >= fourHoursSec) sessionStartIndex = i + 1
         }
 
-        var totalScreenTimeMs = 0L
-        var totalNotifications = 0
+        var totalScreenTimeSec = 0L
         var totalAppSwitches = 0
+        var switchPerHourSum = 0f
 
         for (i in sessionStartIndex until records.size) {
-            totalScreenTimeMs += records[i].screen_on_duration_ms
-            totalNotifications += records[i].notification_interaction_count
+            totalScreenTimeSec += records[i].off_and_on_gap
             totalAppSwitches += records[i].app_switch_count
+            switchPerHourSum += records[i].app_switch_per_hour
         }
 
-        // 세션 경과 시간으로 알림 빈도 계산
-        val sessionDurationMs = records.last().end_time - records[sessionStartIndex].start_time
-        val sessionHours = sessionDurationMs / 3_600_000.0
-        val notifPerHour = if (sessionHours > 0) (totalNotifications / sessionHours).toFloat() else 0f
+        val count = records.size - sessionStartIndex
+        val avgSwitchPerHour = if (count > 0) switchPerHourSum / count else 0f
 
         return TodaySummary(
-            totalScreenTimeMs = totalScreenTimeMs,
-            totalNotifications = totalNotifications,
-            notifPerHour = notifPerHour,
+            totalScreenTimeSec = totalScreenTimeSec,
+            sessionCount = count,
+            avgSwitchPerHour = avgSwitchPerHour,
             totalAppSwitches = totalAppSwitches
         )
     }

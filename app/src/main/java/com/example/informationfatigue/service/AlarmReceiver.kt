@@ -83,9 +83,9 @@ class AlarmReceiver : BroadcastReceiver() {
         wakeLock.acquire(60_000L) // 1 minute max
 
         try {
-            // Start service with COLLECT action
+            // Start service (alarm-based collection is no longer used; kept for compile safety)
             val serviceIntent = Intent(context, DataCollectionService::class.java).apply {
-                action = DataCollectionService.ACTION_COLLECT
+                action = DataCollectionService.ACTION_START_FRESH
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)
