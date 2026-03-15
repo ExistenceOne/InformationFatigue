@@ -19,6 +19,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.example.informationfatigue.R
@@ -50,6 +52,16 @@ class OnboardingActivity : AppCompatActivity() {
         }
 
         setContentView(R.layout.activity_onboarding)
+
+        val onboardingRoot = findViewById<LinearLayout>(R.id.onboardingRoot)
+        val buttonsLayout = findViewById<LinearLayout>(R.id.buttonsLayout)
+        ViewCompat.setOnApplyWindowInsetsListener(onboardingRoot) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val p16 = (16 * resources.displayMetrics.density).toInt()
+            onboardingRoot.setPadding(0, bars.top, 0, 0)
+            buttonsLayout.setPadding(p16, p16, p16, p16 + bars.bottom)
+            insets
+        }
 
         viewPager = findViewById(R.id.viewPager)
         btnNext = findViewById(R.id.btnNext)

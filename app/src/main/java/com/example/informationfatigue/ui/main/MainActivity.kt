@@ -43,11 +43,7 @@ class MainActivity : AppCompatActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (!isGranted) {
-            Toast.makeText(this, "알림 권한이 필요합니다", Toast.LENGTH_SHORT).show()
-        }
-    }
+    ) { /* no-op: notification permission result */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,10 +64,11 @@ class MainActivity : AppCompatActivity() {
         tvTodayAvgSwitchPerHour = findViewById(R.id.tvTodayNotifFreq)
         tvTodayAppSwitches = findViewById(R.id.tvTodayAppSwitches)
 
+        // Edge-to-edge insets: top = status bar, bottom = nav bar
         val rootLayout = findViewById<LinearLayout>(R.id.rootLayout)
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, bars.bottom)
+            v.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
 
@@ -95,10 +92,13 @@ class MainActivity : AppCompatActivity() {
         btnToggleService.setOnClickListener {
             if (DataCollectionService.isRunning(this)) {
                 DataCollectionService.stop(this)
+                applyServiceUI(running = false)
+                Toast.makeText(this, R.string.service_stopped, Toast.LENGTH_SHORT).show()
             } else {
                 DataCollectionService.start(this)
+                applyServiceUI(running = true)
+                Toast.makeText(this, R.string.service_running, Toast.LENGTH_SHORT).show()
             }
-            updateServiceStatus()
         }
 
         btnExport.setOnClickListener {
@@ -117,9 +117,8 @@ class MainActivity : AppCompatActivity() {
         updateServiceStatus()
     }
 
-    private fun updateServiceStatus() {
-        val isRunning = DataCollectionService.isRunning(this)
-        if (isRunning) {
+    private fun applyServiceUI(running: Boolean) {
+        if (running) {
             tvStatus.text = getString(R.string.service_running)
             statusDot.setBackgroundResource(R.drawable.circle_green)
             btnToggleService.text = getString(R.string.stop)
@@ -128,6 +127,10 @@ class MainActivity : AppCompatActivity() {
             statusDot.setBackgroundResource(R.drawable.circle_red)
             btnToggleService.text = getString(R.string.start)
         }
+    }
+
+    private fun updateServiceStatus() {
+        applyServiceUI(DataCollectionService.isRunning(this))
     }
 
     private fun requestNotificationPermissionIfNeeded() {

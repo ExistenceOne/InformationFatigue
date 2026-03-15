@@ -14,7 +14,6 @@ import java.io.FileWriter
  */
 object CsvExporter {
 
-    private const val CSV_FILE_NAME = "information_fatigue_data.csv"
     private const val EXPORTS_DIR = "exports"
 
     private val CSV_HEADER = listOf(
@@ -46,7 +45,12 @@ object CsvExporter {
                 exportDir.mkdirs()
             }
 
-            val file = File(exportDir, CSV_FILE_NAME)
+            val deviceId = records.first().device_id
+            val firstOn  = records.first().screen_on_timestamp_unix
+            val lastOff  = records.last().screen_off_timestamp_unix
+            val fileName = "${deviceId}_${firstOn}_${lastOff}.csv"
+
+            val file = File(exportDir, fileName)
             FileWriter(file).use { writer ->
                 writer.appendLine(CSV_HEADER)
                 for (record in records) {
