@@ -24,11 +24,7 @@ class UsageDataCollector(private val context: Context) {
         val appSwitchCount: Int,
         val uniqueAppsCount: Int,
         val avgAppSessionSec: Float,
-        val stdAppSessionSec: Float,
-        /** Earliest actual ACTIVITY_RESUMED time within the window (ms). Falls back to startTime. */
-        val sessionStartMs: Long,
-        /** Latest actual ACTIVITY_PAUSED (or screen-off close) time within the window (ms). Falls back to endTime. */
-        val sessionEndMs: Long
+        val stdAppSessionSec: Float
     )
 
     private data class AppSession(
@@ -47,10 +43,10 @@ class UsageDataCollector(private val context: Context) {
     fun collect(startTime: Long, endTime: Long): UsageData {
         val usageStatsManager =
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                ?: return UsageData(0, 0, 0f, 0f, startTime, endTime)
+                ?: return UsageData(0, 0, 0f, 0f)
 
         val events = usageStatsManager.queryEvents(startTime - LOOKBACK_MS, endTime)
-            ?: return UsageData(0, 0, 0f, 0f, startTime, endTime)
+            ?: return UsageData(0, 0, 0f, 0f)
 
         val sessions = mutableListOf<AppSession>()
         // pkg -> the timestamp of its last ACTIVITY_RESUMED (may be before startTime)
@@ -124,16 +120,11 @@ class UsageDataCollector(private val context: Context) {
             0f
         }
 
-        val sessionStartMs = sessions.minOfOrNull { it.startTime } ?: startTime
-        val sessionEndMs   = sessions.maxOfOrNull { it.endTime }   ?: endTime
-
         return UsageData(
             appSwitchCount = switchCount,
             uniqueAppsCount = uniqueApps.size,
             avgAppSessionSec = avgSec,
-            stdAppSessionSec = stdSec,
-            sessionStartMs = sessionStartMs,
-            sessionEndMs = sessionEndMs
+            stdAppSessionSec = stdSec
         )
     }
 }
