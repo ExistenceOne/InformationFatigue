@@ -77,4 +77,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             callback(records)
         }
     }
+
+    fun deleteAll() {
+        viewModelScope.launch {
+            repository.deleteAll()
+        }
+    }
 }

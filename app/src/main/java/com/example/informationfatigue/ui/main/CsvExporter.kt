@@ -1,5 +1,6 @@
 package com.example.informationfatigue.ui.main
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -11,6 +12,12 @@ import java.io.FileWriter
 
 /**
  * Exports DataRecord list to CSV and shares via FileProvider.
+ *
+ * Files are written to getExternalFilesDir(null)/exports/ so they are
+ * accessible from the device file manager at:
+ *   Android/data/com.example.informationfatigue/files/exports/
+ *
+ * Internal storage (filesDir/exports/) is used as fallback if external is unavailable.
  */
 object CsvExporter {
 
@@ -30,9 +37,6 @@ object CsvExporter {
         "app_switch_per_hour"
     ).joinToString(",")
 
-    /**
-     * Export records to CSV file and return the file, or null on error.
-     */
     fun exportToCsv(context: Context, records: List<DataRecord>): File? {
         if (records.isEmpty()) {
             Toast.makeText(context, R.string.csv_no_data, Toast.LENGTH_SHORT).show()
@@ -40,10 +44,9 @@ object CsvExporter {
         }
 
         return try {
-            val exportDir = File(context.filesDir, EXPORTS_DIR)
-            if (!exportDir.exists()) {
-                exportDir.mkdirs()
-            }
+            // Prefer external files dir (visible in file manager); fall back to internal
+            val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+            val exportDir = File(baseDir, EXPORTS_DIR).also { it.mkdirs() }
 
             val deviceId = records.first().device_id
             val firstOn  = records.first().screen_on_timestamp_unix
@@ -66,9 +69,6 @@ object CsvExporter {
         }
     }
 
-    /**
-     * Export and share the CSV file via an intent.
-     */
     fun exportAndShare(context: Context, records: List<DataRecord>) {
         val file = exportToCsv(context, records) ?: return
 
@@ -81,12 +81,15 @@ object CsvExporter {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/csv"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.csv_share_title))
+            // ClipData is required for the chooser to grant URI read permission
+            // to every resolved app (including KakaoTalk, Telegram, etc.)
+            clipData = ClipData.newRawUri(null, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // NOTE: do NOT set EXTRA_SUBJECT — cloud apps (Drive, OneDrive) use it
+            // as the save filename, overriding the actual file name.
         }
 
-        val chooser = Intent.createChooser(shareIntent, context.getString(R.string.csv_share_title))
-        context.startActivity(chooser)
+        context.startActivity(Intent.createChooser(shareIntent, null))
     }
 
     private fun recordToCsvLine(record: DataRecord): String {

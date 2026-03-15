@@ -20,8 +20,10 @@ import com.example.informationfatigue.collector.UsageDataCollector
 import com.example.informationfatigue.data.DataRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class DataCollectionService : Service() {
 
@@ -33,7 +35,8 @@ class DataCollectionService : Service() {
         private const val KEY_IS_RUNNING = "is_running"
         private const val KEY_T1 = "screen_on_t1"
         private const val KEY_T2 = "screen_off_t2"
-        const val ACTION_START_FRESH = "com.example.informationfatigue.ACTION_START_FRESH"
+        const val ACTION_START_FRESH     = "com.example.informationfatigue.ACTION_START_FRESH"
+        const val ACTION_STOP_GRACEFULLY = "com.example.informationfatigue.ACTION_STOP_GRACEFULLY"
 
         fun start(context: Context) {
             val intent = Intent(context, DataCollectionService::class.java).apply {
@@ -46,8 +49,19 @@ class DataCollectionService : Service() {
             }
         }
 
+        /**
+         * Requests a graceful stop: the service will record T2 for any
+         * in-progress session, collect it, then stop itself.
+         */
         fun stop(context: Context) {
-            context.stopService(Intent(context, DataCollectionService::class.java))
+            val intent = Intent(context, DataCollectionService::class.java).apply {
+                action = ACTION_STOP_GRACEFULLY
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
 
         fun isRunning(context: Context): Boolean {
@@ -96,26 +110,16 @@ class DataCollectionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand action=${intent?.action}")
 
-        if (intent?.action == ACTION_START_FRESH) {
-            // Fresh start: if screen is currently ON set T1, clear any stale T2
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (pm.isInteractive) {
-                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-                    .putLong(KEY_T1, System.currentTimeMillis())
-                    .putLong(KEY_T2, 0L)
-                    .apply()
-                Log.d(TAG, "Fresh start with screen ON, T1 set")
-            } else {
-                // Screen is off at start; clear T1/T2 so next ON starts fresh
-                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-                    .putLong(KEY_T1, 0L)
-                    .putLong(KEY_T2, 0L)
-                    .apply()
-            }
+        when (intent?.action) {
+            ACTION_START_FRESH     -> handleFreshStart()
+            ACTION_STOP_GRACEFULLY -> handleGracefulStop()
+            // null = START_STICKY restart; screen events drive collection
         }
 
         return START_STICKY
     }
+
+    // ─── Screen event handlers ────────────────────────────────────────────
 
     private fun handleScreenOn() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -125,12 +129,10 @@ class DataCollectionService : Service() {
 
         Log.d(TAG, "Screen ON: T1=$t1 T2=$t2")
 
-        // If a complete session [T1, T2] exists, collect it
         if (t1 > 0L && t2 > t1) {
             collectSession(t1, t2)
         }
 
-        // Start new session: T1 = now, clear T2
         prefs.edit()
             .putLong(KEY_T1, now)
             .putLong(KEY_T2, 0L)
@@ -144,28 +146,93 @@ class DataCollectionService : Service() {
             .edit().putLong(KEY_T2, now).apply()
     }
 
-    private fun collectSession(t1: Long, t2: Long) {
-        scope.launch {
-            try {
-                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-                val wakeLock = pm.newWakeLock(
-                    PowerManager.PARTIAL_WAKE_LOCK,
-                    "InformationFatigue:Collection"
-                )
-                wakeLock.acquire(30_000L)
-                try {
-                    val usageData = usageCollector.collect(t1, t2)
-                    val record = DataAggregator.aggregate(deviceId, t1, t2, usageData)
-                    repository.insert(record)
-                    Log.d(TAG, "Session saved: on=${record.screen_on_timestamp_dt} off=${record.screen_off_timestamp_dt} gap=${record.off_and_on_gap}s")
-                } finally {
-                    if (wakeLock.isHeld) wakeLock.release()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Collection error", e)
-            }
+    // ─── Start / Stop handlers ────────────────────────────────────────────
+
+    private fun handleFreshStart() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isInteractive) {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putLong(KEY_T1, System.currentTimeMillis())
+                .putLong(KEY_T2, 0L)
+                .apply()
+            Log.d(TAG, "Fresh start, screen ON → T1 set")
+        } else {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putLong(KEY_T1, 0L)
+                .putLong(KEY_T2, 0L)
+                .apply()
         }
     }
+
+    /**
+     * Graceful stop:
+     * 1. If screen is ON, snapshot now as T2 for the current session.
+     * 2. If a complete session [T1, T2] exists, collect it with NonCancellable
+     *    to ensure it finishes even as the job is being torn down.
+     * 3. Clear T1/T2 immediately to prevent a concurrent screen-ON event from
+     *    double-collecting the same session.
+     * 4. Call stopSelf() after collection (or immediately if nothing to collect).
+     */
+    private fun handleGracefulStop() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val now = System.currentTimeMillis()
+
+        val t1 = prefs.getLong(KEY_T1, 0L)
+        val t2 = if (pm.isInteractive) now else prefs.getLong(KEY_T2, 0L)
+
+        // Clear immediately so no concurrent screen event re-processes this session
+        prefs.edit()
+            .putLong(KEY_T1, 0L)
+            .putLong(KEY_T2, 0L)
+            .apply()
+
+        if (t1 > 0L && t2 > t1) {
+            Log.d(TAG, "Graceful stop: collecting final session T1=$t1 T2=$t2")
+            scope.launch {
+                withContext(NonCancellable) {
+                    collectSessionInternal(t1, t2)
+                }
+                stopSelf()
+            }
+        } else {
+            Log.d(TAG, "Graceful stop: no session to collect, stopping now")
+            stopSelf()
+        }
+    }
+
+    // ─── Collection ───────────────────────────────────────────────────────
+
+    /** Launches a background collection for a complete [t1, t2] session. */
+    private fun collectSession(t1: Long, t2: Long) {
+        scope.launch {
+            collectSessionInternal(t1, t2)
+        }
+    }
+
+    /** Core collection logic — call inside an appropriate coroutine context. */
+    private suspend fun collectSessionInternal(t1: Long, t2: Long) {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "InformationFatigue:Collection"
+            )
+            wakeLock.acquire(30_000L)
+            try {
+                val usageData = usageCollector.collect(t1, t2)
+                val record = DataAggregator.aggregate(deviceId, usageData.sessionStartMs, usageData.sessionEndMs, usageData)
+                repository.insert(record)
+                Log.d(TAG, "Session saved: on=${record.screen_on_timestamp_dt} off=${record.screen_off_timestamp_dt} gap=${record.off_and_on_gap}s")
+            } finally {
+                if (wakeLock.isHeld) wakeLock.release()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Collection error", e)
+        }
+    }
+
+    // ─── Notification ─────────────────────────────────────────────────────
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -190,6 +257,8 @@ class DataCollectionService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
+
+    // ─── Lifecycle ────────────────────────────────────────────────────────
 
     override fun onDestroy() {
         super.onDestroy()

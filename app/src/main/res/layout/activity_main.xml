@@ -247,16 +247,35 @@
 
     </LinearLayout>
 
-    <!-- Log list -->
-    <TextView
+    <!-- Log list header + clear button -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/recent_log"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:textColor="?android:attr/textColorPrimary"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="8dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/recent_log"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="?android:attr/textColorPrimary"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnClearLogs"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:text="@string/clear_logs"
+            android:textColor="@android:color/holo_red_dark"
+            android:textSize="13sp" />
+
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"

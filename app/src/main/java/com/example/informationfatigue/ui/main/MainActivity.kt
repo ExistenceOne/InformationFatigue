@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -34,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnToggleService: MaterialButton
     private lateinit var btnExport: MaterialButton
     private lateinit var btnHistory: MaterialButton
+    private lateinit var btnClearLogs: MaterialButton
 
     // Today summary views
     private lateinit var tvTodayScreenTime: TextView
@@ -57,6 +59,7 @@ class MainActivity : AppCompatActivity() {
         btnToggleService = findViewById(R.id.btnToggleService)
         btnExport = findViewById(R.id.btnExport)
         btnHistory = findViewById(R.id.btnHistory)
+        btnClearLogs = findViewById(R.id.btnClearLogs)
         recyclerView = findViewById(R.id.recyclerView)
 
         tvTodayScreenTime = findViewById(R.id.tvTodayScreenTime)
@@ -109,6 +112,18 @@ class MainActivity : AppCompatActivity() {
 
         btnHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
+        }
+
+        btnClearLogs.setOnClickListener {
+            val count = viewModel.allRecords.value?.size ?: 0
+            AlertDialog.Builder(this)
+                .setTitle(R.string.clear_logs_title)
+                .setMessage(getString(R.string.clear_logs_message, count))
+                .setPositiveButton(R.string.clear_logs_confirm) { _, _ ->
+                    viewModel.deleteAll()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         }
     }
 

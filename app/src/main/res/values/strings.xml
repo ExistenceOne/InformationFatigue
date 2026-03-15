@@ -31,6 +31,10 @@
     <string name="export_csv">CSV 내보내기</string>
     <string name="collection_log">수집 로그</string>
     <string name="no_data">수집된 데이터가 없습니다</string>
+    <string name="clear_logs">로그 초기화</string>
+    <string name="clear_logs_title">로그 초기화</string>
+    <string name="clear_logs_message">수집된 로그 %d개를 모두 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.</string>
+    <string name="clear_logs_confirm">삭제</string>
 
     <!-- Log item -->
     <string name="session_duration_format">세션: %ds</string>
