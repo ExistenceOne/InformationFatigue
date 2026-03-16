@@ -29,12 +29,15 @@ object CsvExporter {
         "screen_on_timestamp_dt",
         "screen_off_timestamp_unix",
         "screen_off_timestamp_dt",
-        "off_and_on_gap",
-        "app_switch_count",
-        "unique_app_count",
-        "app_duration_mean",
-        "app_duration_std",
-        "app_switch_per_hour"
+        "screen_duration",
+        "unique_foreground_app_count",
+        "foreground_app_count",
+        "foreground_app_switch_count",
+        "foreground_app_switch_per_hour",
+        "foreground_app_duration_sum",
+        "foreground_app_duration_mean",
+        "foreground_app_duration_max",
+        "concentration_ratio"
     ).joinToString(",")
 
     fun exportToCsv(context: Context, records: List<DataRecord>): File? {
@@ -99,12 +102,15 @@ object CsvExporter {
             record.screen_on_timestamp_dt,
             record.screen_off_timestamp_unix,
             record.screen_off_timestamp_dt,
-            record.off_and_on_gap,
-            record.app_switch_count,
-            record.unique_app_count,
-            record.app_duration_mean,
-            record.app_duration_std,
-            record.app_switch_per_hour
+            record.screen_duration,
+            record.unique_foreground_app_count,
+            record.foreground_app_count,
+            record.foreground_app_switch_count,
+            record.foreground_app_switch_per_hour,
+            record.foreground_app_duration_sum,
+            record.foreground_app_duration_mean,
+            record.foreground_app_duration_max,
+            record.concentration_ratio
         ).joinToString(",")
     }
 }

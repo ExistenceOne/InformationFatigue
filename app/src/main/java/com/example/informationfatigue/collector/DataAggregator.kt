@@ -25,10 +25,15 @@ object DataAggregator {
     ): DataRecord {
         val onUnix = screenOnMs / 1000
         val offUnix = screenOffMs / 1000
-        val gapSec = offUnix - onUnix
+        val screenDuration = offUnix - onUnix
 
-        val switchPerHour = if (gapSec > 0) {
-            usageData.appSwitchCount.toFloat() / (gapSec / 3600f)
+        val switchPerHour = if (usageData.durationSumSec > 0) {
+            usageData.appSwitchCount.toFloat() / (usageData.durationSumSec / 3600f)
+        } else {
+            0f
+        }
+        val concentrationRatio = if (usageData.durationSumSec > 0) {
+            usageData.durationMaxSec / usageData.durationSumSec
         } else {
             0f
         }
@@ -39,12 +44,15 @@ object DataAggregator {
             screen_on_timestamp_dt = dtFormat.format(Date(screenOnMs)),
             screen_off_timestamp_unix = offUnix,
             screen_off_timestamp_dt = dtFormat.format(Date(screenOffMs)),
-            off_and_on_gap = gapSec,
-            app_switch_count = usageData.appSwitchCount,
-            unique_app_count = usageData.uniqueAppsCount,
-            app_duration_mean = usageData.avgAppSessionSec,
-            app_duration_std = usageData.stdAppSessionSec,
-            app_switch_per_hour = switchPerHour
+            screen_duration = screenDuration,
+            unique_foreground_app_count = usageData.uniqueAppsCount,
+            foreground_app_count = usageData.appCount,
+            foreground_app_switch_count = usageData.appSwitchCount,
+            foreground_app_switch_per_hour = switchPerHour,
+            foreground_app_duration_sum = usageData.durationSumSec,
+            foreground_app_duration_mean = usageData.durationMeanSec,
+            foreground_app_duration_max = usageData.durationMaxSec,
+            concentration_ratio = concentrationRatio
         )
     }
 }

@@ -3,8 +3,6 @@ package com.example.informationfatigue.collector
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
-import kotlin.math.sqrt
-
 /**
  * Collects app usage data using UsageStatsManager.queryEvents().
  *
@@ -23,8 +21,10 @@ class UsageDataCollector(private val context: Context) {
     data class UsageData(
         val appSwitchCount: Int,
         val uniqueAppsCount: Int,
-        val avgAppSessionSec: Float,
-        val stdAppSessionSec: Float
+        val appCount: Int,
+        val durationSumSec: Float,
+        val durationMeanSec: Float,
+        val durationMaxSec: Float
     )
 
     private data class AppSession(
@@ -43,10 +43,10 @@ class UsageDataCollector(private val context: Context) {
     fun collect(startTime: Long, endTime: Long): UsageData {
         val usageStatsManager =
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                ?: return UsageData(0, 0, 0f, 0f)
+                ?: return UsageData(0, 0, 0, 0f, 0f, 0f)
 
         val events = usageStatsManager.queryEvents(startTime - LOOKBACK_MS, endTime)
-            ?: return UsageData(0, 0, 0f, 0f)
+            ?: return UsageData(0, 0, 0, 0f, 0f, 0f)
 
         val sessions = mutableListOf<AppSession>()
         // pkg -> the timestamp of its last ACTIVITY_RESUMED (may be before startTime)
@@ -107,24 +107,17 @@ class UsageDataCollector(private val context: Context) {
         }
 
         val durationsMs = sessions.map { (it.endTime - it.startTime).toDouble() }
-        val avgSec = if (durationsMs.isNotEmpty()) {
-            (durationsMs.average() / 1000.0).toFloat()
-        } else {
-            0f
-        }
-        val stdSec = if (durationsMs.size > 1) {
-            val mean = durationsMs.average()
-            val variance = durationsMs.sumOf { (it - mean) * (it - mean) } / durationsMs.size
-            (sqrt(variance) / 1000.0).toFloat()
-        } else {
-            0f
-        }
+        val sumSec = (durationsMs.sum() / 1000.0).toFloat()
+        val meanSec = if (durationsMs.isNotEmpty()) sumSec / durationsMs.size else 0f
+        val maxSec = if (durationsMs.isNotEmpty()) (durationsMs.max() / 1000.0).toFloat() else 0f
 
         return UsageData(
             appSwitchCount = switchCount,
             uniqueAppsCount = uniqueApps.size,
-            avgAppSessionSec = avgSec,
-            stdAppSessionSec = stdSec
+            appCount = sessions.size,
+            durationSumSec = sumSec,
+            durationMeanSec = meanSec,
+            durationMaxSec = maxSec
         )
     }
 }

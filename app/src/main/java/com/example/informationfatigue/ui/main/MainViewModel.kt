@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 data class TodaySummary(
-    val totalScreenTimeSec: Long = 0L,  // sum of off_and_on_gap (seconds)
+    val totalScreenTimeSec: Long = 0L,  // sum of screen_duration (seconds)
     val sessionCount: Int = 0,
     val avgSwitchPerHour: Float = 0f,
     val totalAppSwitches: Int = 0
@@ -55,9 +55,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         var switchPerHourSum = 0f
 
         for (i in sessionStartIndex until records.size) {
-            totalScreenTimeSec += records[i].off_and_on_gap
-            totalAppSwitches += records[i].app_switch_count
-            switchPerHourSum += records[i].app_switch_per_hour
+            totalScreenTimeSec += records[i].screen_duration
+            totalAppSwitches += records[i].foreground_app_switch_count
+            switchPerHourSum += records[i].foreground_app_switch_per_hour
         }
 
         val count = records.size - sessionStartIndex

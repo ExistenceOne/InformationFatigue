@@ -42,7 +42,7 @@
     <string name="unique_apps_format">고유앱: %d개</string>
     <string name="app_switch_per_hour_format">전환/시간: %.1f</string>
     <string name="app_duration_mean_format">앱평균: %.1fs</string>
-    <string name="app_duration_std_format">앱표준편차: %.1fs</string>
+    <string name="app_duration_std_format">집중도: %.3f</string>
 
     <!-- Countdown & History -->
     <string name="recent_log">최근 수집 로그</string>

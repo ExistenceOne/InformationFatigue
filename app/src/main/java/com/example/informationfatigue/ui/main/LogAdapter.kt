@@ -27,7 +27,7 @@ class LogAdapter : ListAdapter<DataRecord, LogAdapter.LogViewHolder>(DiffCallbac
         val tvUniqueApps: TextView = view.findViewById(R.id.tvUniqueApps)
         val tvAppSwitchPerHour: TextView = view.findViewById(R.id.tvAppSwitchPerHour)
         val tvAppDurationMean: TextView = view.findViewById(R.id.tvAppDurationMean)
-        val tvAppDurationStd: TextView = view.findViewById(R.id.tvAppDurationStd)
+        val tvConcentrationRatio: TextView = view.findViewById(R.id.tvConcentrationRatio)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LogViewHolder {
@@ -41,11 +41,11 @@ class LogAdapter : ListAdapter<DataRecord, LogAdapter.LogViewHolder>(DiffCallbac
         val ctx = holder.itemView.context
 
         holder.tvTimeRange.text = "${record.screen_on_timestamp_dt} ~ ${record.screen_off_timestamp_dt}"
-        holder.tvSessionDuration.text = ctx.getString(R.string.session_duration_format, record.off_and_on_gap)
-        holder.tvAppSwitch.text = ctx.getString(R.string.app_switch_format, record.app_switch_count)
-        holder.tvUniqueApps.text = ctx.getString(R.string.unique_apps_format, record.unique_app_count)
-        holder.tvAppSwitchPerHour.text = ctx.getString(R.string.app_switch_per_hour_format, record.app_switch_per_hour)
-        holder.tvAppDurationMean.text = ctx.getString(R.string.app_duration_mean_format, record.app_duration_mean)
-        holder.tvAppDurationStd.text = ctx.getString(R.string.app_duration_std_format, record.app_duration_std)
+        holder.tvSessionDuration.text = ctx.getString(R.string.session_duration_format, record.screen_duration)
+        holder.tvAppSwitch.text = ctx.getString(R.string.app_switch_format, record.foreground_app_switch_count)
+        holder.tvUniqueApps.text = ctx.getString(R.string.unique_apps_format, record.unique_foreground_app_count)
+        holder.tvAppSwitchPerHour.text = ctx.getString(R.string.app_switch_per_hour_format, record.foreground_app_switch_per_hour)
+        holder.tvAppDurationMean.text = ctx.getString(R.string.app_duration_mean_format, record.foreground_app_duration_mean)
+        holder.tvConcentrationRatio.text = ctx.getString(R.string.app_duration_std_format, record.concentration_ratio)
     }
 }

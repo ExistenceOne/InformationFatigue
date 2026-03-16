@@ -223,7 +223,7 @@ class DataCollectionService : Service() {
                 val usageData = usageCollector.collect(t1, t2)
                 val record = DataAggregator.aggregate(deviceId, t1, t2, usageData)
                 repository.insert(record)
-                Log.d(TAG, "Session saved: on=${record.screen_on_timestamp_dt} off=${record.screen_off_timestamp_dt} gap=${record.off_and_on_gap}s")
+                Log.d(TAG, "Session saved: on=${record.screen_on_timestamp_dt} off=${record.screen_off_timestamp_dt} duration=${record.screen_duration}s")
             } finally {
                 if (wakeLock.isHeld) wakeLock.release()
             }

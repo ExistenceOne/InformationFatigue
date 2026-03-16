@@ -89,7 +89,7 @@
                 android:textColor="?android:attr/textColorSecondary" />
 
             <TextView
-                android:id="@+id/tvAppDurationStd"
+                android:id="@+id/tvConcentrationRatio"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
