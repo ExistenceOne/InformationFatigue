@@ -17,7 +17,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -37,7 +36,6 @@ class OnboardingActivity : AppCompatActivity() {
 
     private val steps = listOf(
         OnboardingStep.USAGE_ACCESS,
-        OnboardingStep.NOTIFICATION_ACCESS,
         OnboardingStep.BATTERY_OPTIMIZATION,
         OnboardingStep.EXACT_ALARM
     )
@@ -172,14 +170,12 @@ class OnboardingActivity : AppCompatActivity() {
     }
 
     private fun areRequiredPermissionsGranted(): Boolean {
-        return isPermissionGranted(OnboardingStep.USAGE_ACCESS) &&
-                isPermissionGranted(OnboardingStep.NOTIFICATION_ACCESS)
+        return isPermissionGranted(OnboardingStep.USAGE_ACCESS)
     }
 
     private fun isPermissionGranted(step: OnboardingStep): Boolean {
         return when (step) {
             OnboardingStep.USAGE_ACCESS -> isUsageAccessGranted()
-            OnboardingStep.NOTIFICATION_ACCESS -> isNotificationAccessGranted()
             OnboardingStep.BATTERY_OPTIMIZATION -> isBatteryOptimizationIgnored()
             OnboardingStep.EXACT_ALARM -> isExactAlarmAllowed()
         }
@@ -187,26 +183,13 @@ class OnboardingActivity : AppCompatActivity() {
 
     private fun isUsageAccessGranted(): Boolean {
         val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                packageName
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                packageName
-            )
-        }
+        @Suppress("DEPRECATION")
+        val mode = appOps.unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            Process.myUid(),
+            packageName
+        )
         return mode == AppOpsManager.MODE_ALLOWED
-    }
-
-    private fun isNotificationAccessGranted(): Boolean {
-        return NotificationManagerCompat.getEnabledListenerPackages(this)
-            .contains(packageName)
     }
 
     private fun isBatteryOptimizationIgnored(): Boolean {
@@ -283,9 +266,6 @@ class OnboardingActivity : AppCompatActivity() {
             OnboardingStep.USAGE_ACCESS -> {
                 Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
             }
-            OnboardingStep.NOTIFICATION_ACCESS -> {
-                Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-            }
             OnboardingStep.BATTERY_OPTIMIZATION -> {
                 Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             }
@@ -311,14 +291,12 @@ class OnboardingActivity : AppCompatActivity() {
 
 enum class OnboardingStep(val isRequired: Boolean) {
     USAGE_ACCESS(isRequired = true),
-    NOTIFICATION_ACCESS(isRequired = true),
     BATTERY_OPTIMIZATION(isRequired = false),
     EXACT_ALARM(isRequired = false);
 
     fun getTitle(context: Context): String {
         return when (this) {
             USAGE_ACCESS -> context.getString(R.string.onboarding_step1_title)
-            NOTIFICATION_ACCESS -> context.getString(R.string.onboarding_step2_title)
             BATTERY_OPTIMIZATION -> context.getString(R.string.onboarding_step3_title)
             EXACT_ALARM -> context.getString(R.string.onboarding_step4_title)
         }
@@ -327,7 +305,6 @@ enum class OnboardingStep(val isRequired: Boolean) {
     fun getDescription(context: Context): String {
         return when (this) {
             USAGE_ACCESS -> context.getString(R.string.onboarding_step1_desc)
-            NOTIFICATION_ACCESS -> context.getString(R.string.onboarding_step2_desc)
             BATTERY_OPTIMIZATION -> context.getString(R.string.onboarding_step3_desc)
             EXACT_ALARM -> context.getString(R.string.onboarding_step4_desc)
         }

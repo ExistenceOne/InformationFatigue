@@ -23,11 +23,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         fun getPendingIntent(context: Context): PendingIntent {
             val intent = Intent(context, AlarmReceiver::class.java)
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             return PendingIntent.getBroadcast(context, REQUEST_CODE, intent, flags)
         }
 
@@ -42,28 +38,20 @@ class AlarmReceiver : BroadcastReceiver() {
             val pendingIntent = getPendingIntent(context)
             val triggerAt = System.currentTimeMillis() + FIVE_MIN_MS
 
-            when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                    if (alarmManager.canScheduleExactAlarms()) {
-                        alarmManager.setExactAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
-                        )
-                    } else {
-                        alarmManager.setAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
-                        )
-                    }
-                }
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (alarmManager.canScheduleExactAlarms()) {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
                     )
-                }
-                else -> {
-                    alarmManager.setExact(
+                } else {
+                    alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
                     )
                 }
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent
+                )
             }
         }
     }
@@ -87,11 +75,7 @@ class AlarmReceiver : BroadcastReceiver() {
             val serviceIntent = Intent(context, DataCollectionService::class.java).apply {
                 action = DataCollectionService.ACTION_START_FRESH
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
-            }
+            context.startForegroundService(serviceIntent)
         } finally {
             if (wakeLock.isHeld) {
                 wakeLock.release()
