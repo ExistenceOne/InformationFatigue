@@ -3,6 +3,8 @@ package com.example.informationfatigue.ui.history
 import android.os.Bundle
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -30,6 +32,13 @@ class HistoryActivity : AppCompatActivity() {
         logAdapter = LogAdapter()
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = logAdapter
+
+        ViewCompat.setOnApplyWindowInsetsListener(recyclerView) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val p8 = (8 * resources.displayMetrics.density).toInt()
+            v.setPadding(p8, p8, p8, p8 + bars.bottom)
+            insets
+        }
 
         // Reuse same ViewModel — shows ALL records (no filtering)
         viewModel = ViewModelProvider(this)[MainViewModel::class.java]

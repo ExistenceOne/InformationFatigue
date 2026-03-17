@@ -9,6 +9,9 @@ import com.example.informationfatigue.R
 import com.example.informationfatigue.data.DataRecord
 import java.io.File
 import java.io.FileWriter
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Exports DataRecord list to CSV and shares via FileProvider.
@@ -22,6 +25,8 @@ import java.io.FileWriter
 object CsvExporter {
 
     private const val EXPORTS_DIR = "exports"
+    private val FILENAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
+        .withZone(ZoneId.systemDefault())
 
     private val CSV_HEADER = listOf(
         "device_id",
@@ -54,7 +59,9 @@ object CsvExporter {
             val deviceId = records.first().device_id
             val firstOn  = records.first().screen_on_timestamp_unix
             val lastOff  = records.last().screen_off_timestamp_unix
-            val fileName = "${deviceId}_${firstOn}_${lastOff}.csv"
+            val firstOnStr = FILENAME_FORMATTER.format(Instant.ofEpochSecond(firstOn))
+            val lastOffStr = FILENAME_FORMATTER.format(Instant.ofEpochSecond(lastOff))
+            val fileName = "${deviceId}_${firstOnStr}_${lastOffStr}.csv"
 
             val file = File(exportDir, fileName)
             FileWriter(file).use { writer ->
@@ -82,7 +89,7 @@ object CsvExporter {
         )
 
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/csv"
+            type = "application/octet-stream"
             putExtra(Intent.EXTRA_STREAM, uri)
             // ClipData is required for the chooser to grant URI read permission
             // to every resolved app (including KakaoTalk, Telegram, etc.)
