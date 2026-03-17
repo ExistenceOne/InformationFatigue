@@ -20,5 +20,7 @@ data class DataRecord(
     val foreground_app_duration_sum: Float,      // seconds
     val foreground_app_duration_mean: Float,     // foreground_app_duration_sum / foreground_app_count
     val foreground_app_duration_max: Float,      // seconds (top app duration)
-    val concentration_ratio: Float               // foreground_app_duration_max / foreground_app_duration_sum
+    val concentration_ratio: Float,              // foreground_app_duration_max / foreground_app_duration_sum
+    val foreground_apps_and_durations: String,   // "pkg1:dur1|pkg2:dur2" — ordered by execution
+    val unique_foreground_apps_and_durations: String // "pkg1:dur1|pkg2:dur2" — unique, sorted by duration desc
 )

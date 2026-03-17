@@ -52,7 +52,12 @@ object DataAggregator {
             foreground_app_duration_sum = usageData.durationSumSec,
             foreground_app_duration_mean = usageData.durationMeanSec,
             foreground_app_duration_max = usageData.durationMaxSec,
-            concentration_ratio = concentrationRatio
+            concentration_ratio = concentrationRatio,
+            foreground_apps_and_durations = serializeList(usageData.foregroundAppsAndDurations),
+            unique_foreground_apps_and_durations = serializeList(usageData.uniqueForegroundAppsAndDurations)
         )
     }
+
+    private fun serializeList(list: List<Pair<String, Float>>): String =
+        list.joinToString("|") { (pkg, dur) -> "$pkg:${"%.1f".format(dur)}" }
 }

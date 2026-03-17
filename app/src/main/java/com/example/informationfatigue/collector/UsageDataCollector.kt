@@ -24,7 +24,9 @@ class UsageDataCollector(private val context: Context) {
         val appCount: Int,
         val durationSumSec: Float,
         val durationMeanSec: Float,
-        val durationMaxSec: Float
+        val durationMaxSec: Float,
+        val foregroundAppsAndDurations: List<Pair<String, Float>>,
+        val uniqueForegroundAppsAndDurations: List<Pair<String, Float>>
     )
 
     private data class AppSession(
@@ -43,10 +45,10 @@ class UsageDataCollector(private val context: Context) {
     fun collect(startTime: Long, endTime: Long): UsageData {
         val usageStatsManager =
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                ?: return UsageData(0, 0, 0, 0f, 0f, 0f)
+                ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList())
 
         val events = usageStatsManager.queryEvents(startTime - LOOKBACK_MS, endTime)
-            ?: return UsageData(0, 0, 0, 0f, 0f, 0f)
+            ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList())
 
         val sessions = mutableListOf<AppSession>()
         // pkg -> the timestamp of its last ACTIVITY_RESUMED (may be before startTime)
@@ -111,13 +113,24 @@ class UsageDataCollector(private val context: Context) {
         val meanSec = if (durationsMs.isNotEmpty()) sumSec / durationsMs.size else 0f
         val maxSec = if (durationsMs.isNotEmpty()) (durationsMs.max() / 1000.0).toFloat() else 0f
 
+        val foregroundAppsAndDurations = sessions
+            .sortedBy { it.startTime }
+            .map { Pair(it.packageName, (it.endTime - it.startTime) / 1000f) }
+
+        val uniqueForegroundAppsAndDurations = sessions
+            .groupBy { it.packageName }
+            .map { (pkg, list) -> Pair(pkg, list.sumOf { (it.endTime - it.startTime) / 1000.0 }.toFloat()) }
+            .sortedByDescending { it.second }
+
         return UsageData(
             appSwitchCount = switchCount,
             uniqueAppsCount = uniqueApps.size,
             appCount = sessions.size,
             durationSumSec = sumSec,
             durationMeanSec = meanSec,
-            durationMaxSec = maxSec
+            durationMaxSec = maxSec,
+            foregroundAppsAndDurations = foregroundAppsAndDurations,
+            uniqueForegroundAppsAndDurations = uniqueForegroundAppsAndDurations
         )
     }
 }

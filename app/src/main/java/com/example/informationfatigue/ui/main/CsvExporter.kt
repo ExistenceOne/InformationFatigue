@@ -42,7 +42,9 @@ object CsvExporter {
         "foreground_app_duration_sum",
         "foreground_app_duration_mean",
         "foreground_app_duration_max",
-        "concentration_ratio"
+        "concentration_ratio",
+        "foreground_apps_and_durations",
+        "unique_foreground_apps_and_durations"
     ).joinToString(",")
 
     fun exportToCsv(context: Context, records: List<DataRecord>): File? {
@@ -117,7 +119,9 @@ object CsvExporter {
             record.foreground_app_duration_sum,
             record.foreground_app_duration_mean,
             record.foreground_app_duration_max,
-            record.concentration_ratio
+            record.concentration_ratio,
+            record.foreground_apps_and_durations,
+            record.unique_foreground_apps_and_durations
         ).joinToString(",")
     }
 }
