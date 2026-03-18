@@ -1,4 +1,4 @@
-package com.example.informationfatigue.collector
+﻿package com.example.informationfatigue.collector
 
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
@@ -24,9 +24,10 @@ class UsageDataCollector(private val context: Context) {
         val appCount: Int,
         val durationSumSec: Float,
         val durationMeanSec: Float,
-        val durationMaxSec: Float,
+        val uniqueDurationMaxSec: Float,
         val foregroundAppsAndDurations: List<Pair<String, Float>>,
-        val uniqueForegroundAppsAndDurations: List<Pair<String, Float>>
+        val uniqueForegroundAppsAndDurations: List<Pair<String, Float>>,
+        val categoriesAndDurations: List<Pair<Int, Float>>
     )
 
     private data class AppSession(
@@ -45,10 +46,10 @@ class UsageDataCollector(private val context: Context) {
     fun collect(startTime: Long, endTime: Long): UsageData {
         val usageStatsManager =
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList())
+                ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
 
         val events = usageStatsManager.queryEvents(startTime - LOOKBACK_MS, endTime)
-            ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList())
+            ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
 
         val sessions = mutableListOf<AppSession>()
         // pkg -> the timestamp of its last ACTIVITY_RESUMED (may be before startTime)
@@ -65,19 +66,16 @@ class UsageDataCollector(private val context: Context) {
             when (event.eventType) {
                 UsageEvents.Event.ACTIVITY_RESUMED -> {
                     resumedMap[pkg] = event.timeStamp
-                    if (event.timeStamp >= startTime) {
-                        foregroundSequence.add(pkg)
-                    } else {
-                        // Keep updating so we end up with the most-recent pre-T1 app
+                    if (event.timeStamp < startTime) {
                         startingApp = pkg
                     }
                 }
                 UsageEvents.Event.ACTIVITY_PAUSED -> {
                     val resumeTime = resumedMap.remove(pkg) ?: continue
-                    // Clip to the actual screen-on window
                     val clippedStart = maxOf(resumeTime, startTime)
                     val clippedEnd   = minOf(event.timeStamp, endTime)
-                    if (clippedEnd > clippedStart) {
+                    // 투명 액티비티, 백그라운드 처리 방지: 1초 이상만 수집
+                    if (clippedEnd - clippedStart >= 1000L) {
                         sessions.add(AppSession(pkg, clippedStart, clippedEnd))
                     }
                 }
@@ -85,52 +83,73 @@ class UsageDataCollector(private val context: Context) {
         }
 
         // Close sessions still open at endTime
-        // (app stayed in foreground until the screen turned off)
         for ((pkg, resumeTime) in resumedMap) {
             val clippedStart = maxOf(resumeTime, startTime)
-            if (endTime > clippedStart) {
+            if (endTime - clippedStart >= 1000L) {
                 sessions.add(AppSession(pkg, clippedStart, endTime))
             }
         }
 
-        // Prepend the app that was already in foreground at T1 so that
-        // the first real switch (startingApp → nextApp) is counted correctly.
-        if (startingApp != null &&
-            (foregroundSequence.isEmpty() || foregroundSequence.first() != startingApp)
-        ) {
-            foregroundSequence.add(0, startingApp!!)
+        val sortedSessions = sessions.sortedBy { it.startTime }
+
+        // 연속된 동일 패키지명 활동 병합
+        class MergedSession(val packageName: String, val durationMs: Long)
+        val mergedSessions = mutableListOf<MergedSession>()
+        for (session in sortedSessions) {
+            val dur = session.endTime - session.startTime
+            if (mergedSessions.isNotEmpty() && mergedSessions.last().packageName == session.packageName) {
+                val last = mergedSessions.removeAt(mergedSessions.size - 1)
+                mergedSessions.add(MergedSession(last.packageName, last.durationMs + dur))
+            } else {
+                mergedSessions.add(MergedSession(session.packageName, dur))
+            }
         }
 
-        val uniqueApps = sessions.map { it.packageName }.toSet()
+        val uniqueApps = mergedSessions.map { it.packageName }.toSet()
+        val appCount = mergedSessions.size
+        val switchCount = maxOf(0, mergedSessions.size - 1)
 
-        var switchCount = 0
-        for (i in 1 until foregroundSequence.size) {
-            if (foregroundSequence[i] != foregroundSequence[i - 1]) switchCount++
-        }
+        val sumSec = (mergedSessions.sumOf { it.durationMs } / 1000.0).toFloat()
+        val meanSec = if (mergedSessions.isNotEmpty()) sumSec / mergedSessions.size else 0f
 
-        val durationsMs = sessions.map { (it.endTime - it.startTime).toDouble() }
-        val sumSec = (durationsMs.sum() / 1000.0).toFloat()
-        val meanSec = if (durationsMs.isNotEmpty()) sumSec / durationsMs.size else 0f
-        val maxSec = if (durationsMs.isNotEmpty()) (durationsMs.max() / 1000.0).toFloat() else 0f
+        val foregroundAppsAndDurations = mergedSessions
+            .map { Pair(it.packageName, it.durationMs / 1000f) }
 
-        val foregroundAppsAndDurations = sessions
-            .sortedBy { it.startTime }
-            .map { Pair(it.packageName, (it.endTime - it.startTime) / 1000f) }
-
-        val uniqueForegroundAppsAndDurations = sessions
+        val uniqueForegroundAppsAndDurations = mergedSessions
             .groupBy { it.packageName }
-            .map { (pkg, list) -> Pair(pkg, list.sumOf { (it.endTime - it.startTime) / 1000.0 }.toFloat()) }
+            .map { (pkg, list) -> Pair(pkg, list.sumOf { it.durationMs / 1000.0 }.toFloat()) }
+            .sortedByDescending { it.second }
+
+        val uniqueDurationMaxSec = if (uniqueForegroundAppsAndDurations.isNotEmpty()) {
+            uniqueForegroundAppsAndDurations.maxOf { it.second }
+        } else {
+            0f
+        }
+
+        val pm = context.packageManager
+        val categoriesMap = mutableMapOf<Int, Float>()
+        for ((pkg, duration) in uniqueForegroundAppsAndDurations) {
+            val category = try {
+                pm.getApplicationInfo(pkg, 0).category
+            } catch (e: Exception) {
+                -1 // ApplicationInfo.CATEGORY_UNDEFINED
+            }
+            categoriesMap[category] = (categoriesMap[category] ?: 0f) + duration
+        }
+        val categoriesAndDurations = categoriesMap
+            .map { Pair(it.key, it.value) }
             .sortedByDescending { it.second }
 
         return UsageData(
             appSwitchCount = switchCount,
             uniqueAppsCount = uniqueApps.size,
-            appCount = sessions.size,
+            appCount = appCount,
             durationSumSec = sumSec,
             durationMeanSec = meanSec,
-            durationMaxSec = maxSec,
+            uniqueDurationMaxSec = uniqueDurationMaxSec,
             foregroundAppsAndDurations = foregroundAppsAndDurations,
-            uniqueForegroundAppsAndDurations = uniqueForegroundAppsAndDurations
+            uniqueForegroundAppsAndDurations = uniqueForegroundAppsAndDurations,
+            categoriesAndDurations = categoriesAndDurations
         )
     }
 }
