@@ -44,8 +44,7 @@ object CsvExporter {
         "unique_foreground_app_duration_max",
         "concentration_ratio",
         "foreground_apps_and_durations",
-        "unique_foreground_apps_and_durations",
-        "categories_and_durations"
+        "unique_foreground_apps_and_durations"
     ).joinToString(",")
 
     fun exportToCsv(context: Context, records: List<DataRecord>): File? {
@@ -122,8 +121,7 @@ object CsvExporter {
             record.unique_foreground_app_duration_max,
             record.concentration_ratio,
             record.foreground_apps_and_durations,
-            record.unique_foreground_apps_and_durations,
-            record.categories_and_durations
+            record.unique_foreground_apps_and_durations
         ).joinToString(",")
     }
 }

@@ -54,8 +54,7 @@ object DataAggregator {
             unique_foreground_app_duration_max = usageData.uniqueDurationMaxSec,
             concentration_ratio = concentrationRatio,
             foreground_apps_and_durations = serializeList(usageData.foregroundAppsAndDurations),
-            unique_foreground_apps_and_durations = serializeList(usageData.uniqueForegroundAppsAndDurations),
-            categories_and_durations = usageData.categoriesAndDurations.joinToString("|") { (cat, dur) -> "$cat:${"%.1f".format(dur)}" }
+            unique_foreground_apps_and_durations = serializeList(usageData.uniqueForegroundAppsAndDurations)
         )
     }
 
