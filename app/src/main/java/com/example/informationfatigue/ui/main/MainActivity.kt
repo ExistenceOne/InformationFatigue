@@ -18,14 +18,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import com.example.informationfatigue.R
 import com.example.informationfatigue.ui.history.HistoryActivity
-import com.example.informationfatigue.worker.DailyDataCollectionWorker
 import com.google.android.material.button.MaterialButton
-import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -56,7 +51,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         requestNotificationPermissionIfNeeded()
-        scheduleDailyWorker()
 
         btnStartCollection = findViewById(R.id.btnStartCollection)
         progressBar = findViewById(R.id.progressCollection)
@@ -143,16 +137,6 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         }
-    }
-
-    private fun scheduleDailyWorker() {
-        val request = PeriodicWorkRequestBuilder<DailyDataCollectionWorker>(1, TimeUnit.DAYS)
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "daily_usage_collection",
-            ExistingPeriodicWorkPolicy.KEEP,
-            request
-        )
     }
 
     private fun requestNotificationPermissionIfNeeded() {

@@ -3,6 +3,10 @@
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import com.arthurivanets.googleplayscraper.GooglePlayScraper
+import com.arthurivanets.googleplayscraper.HumanBehaviorRequestThrottler
+import com.arthurivanets.googleplayscraper.requests.GetAppDetailsParams
+import com.arthurivanets.googleplayscraper.util.ScraperError
 /**
  * Collects app usage data using UsageStatsManager.queryEvents().
  *
@@ -28,12 +32,14 @@ class UsageDataCollector(private val context: Context) {
         val uniqueAppsCount: Int,
         val appCount: Int,
         val durationSumSec: Float,
-        val durationMeanSec: Float,
         val uniqueDurationMaxSec: Float,
         val foregroundAppsAndDurations: List<Pair<String, Float>>,
         val uniqueForegroundAppsAndDurations: List<Pair<String, Float>>,
-        val categoriesAndDurations: List<Pair<Int, Float>>
-    )
+        val genresAndDurations: List<Pair<String, Float>>
+    ) {
+        val categoriesAndDurations: List<Pair<String, Float>>
+            get() = genresAndDurations
+    }
 
     private data class AppSession(
         val packageName: String,
@@ -46,6 +52,118 @@ class UsageDataCollector(private val context: Context) {
         // ACTIVITY_RESUMED typically fires a few hundred ms before ACTION_SCREEN_ON
         // is delivered; 5 s is conservative but still a tiny query window.
         private const val LOOKBACK_MS = 5_000L
+        private const val OTHER_GENRE_ID = "OTHER"
+
+        private val SUPPORTED_GENRE_IDS = listOf(
+            "ART_AND_DESIGN",
+            "AUTO_AND_VEHICLES",
+            "ANDROID_WEAR",
+            "BEAUTY",
+            "BOOKS_AND_REFERENCE",
+            "BUSINESS",
+            "COMICS",
+            "COMMUNICATION",
+            "DATING",
+            "EDUCATION",
+            "ENTERTAINMENT",
+            "EVENTS",
+            "FINANCE",
+            "FOOD_AND_DRINK",
+            "HEALTH_AND_FITNESS",
+            "HOUSE_AND_HOME",
+            "LIBRARIES_AND_DEMO",
+            "LIFESTYLE",
+            "MAPS_AND_NAVIGATION",
+            "MEDICAL",
+            "MUSIC_AND_AUDIO",
+            "NEWS_AND_MAGAZINES",
+            "PARENTING",
+            "PERSONALIZATION",
+            "PHOTOGRAPHY",
+            "PRODUCTIVITY",
+            "SHOPPING",
+            "SOCIAL",
+            "SPORTS",
+            "TOOLS",
+            "TRAVEL_AND_LOCAL",
+            "VIDEO_PLAYERS",
+            "WATCH_FACE",
+            "WEATHER",
+            "GAME",
+            "GAME_ACTION",
+            "GAME_ADVENTURE",
+            "GAME_ARCADE",
+            "GAME_BOARD",
+            "GAME_CARD",
+            "GAME_CASINO",
+            "GAME_CASUAL",
+            "GAME_EDUCATIONAL",
+            "GAME_MUSIC",
+            "GAME_PUZZLE",
+            "GAME_RACING",
+            "GAME_ROLE_PLAYING",
+            "GAME_SIMULATION",
+            "GAME_SPORTS",
+            "GAME_STRATEGY",
+            "GAME_TRIVIA",
+            "GAME_WORD",
+            "FAMILY",
+            OTHER_GENRE_ID
+        )
+    }
+
+    private val scraper = GooglePlayScraper(
+        GooglePlayScraper.Config(throttler = HumanBehaviorRequestThrottler())
+    )
+    private val appGenreCache = AppGenreCache(context.applicationContext)
+
+    private data class SessionWithGenre(
+        val packageName: String,
+        val durationMs: Long,
+        val genreId: String
+    )
+
+    private fun emptyUsageData(): UsageData {
+        return UsageData(
+            appSwitchCount = 0,
+            uniqueAppsCount = 0,
+            appCount = 0,
+            durationSumSec = 0f,
+            uniqueDurationMaxSec = 0f,
+            foregroundAppsAndDurations = emptyList(),
+            uniqueForegroundAppsAndDurations = emptyList(),
+            genresAndDurations = SUPPORTED_GENRE_IDS.map { it to 0f }
+        )
+    }
+
+    private fun resolveGenreId(packageName: String): String? {
+        if (appGenreCache.has(packageName)) {
+            return appGenreCache.get(packageName)
+        }
+
+        val response = scraper.getAppDetails(
+            GetAppDetailsParams(
+                appId = packageName,
+                language = "KO",
+                country = "KR"
+            )
+        ).execute()
+
+        if (response.isSuccess) {
+            val resolved = response.requireResult().genreId
+                .takeIf { it.isNotBlank() }
+                ?: OTHER_GENRE_ID
+            appGenreCache.put(packageName, resolved)
+            return resolved
+        }
+
+        val error = response.requireError()
+        if (error is ScraperError.HttpError && error.statusCode == 404) {
+            // 404 is treated as non-target app and cached to avoid repeated requests.
+            appGenreCache.putNotTarget(packageName)
+        }
+
+        return null
     }
 
     fun collectScreenSessions(
@@ -119,11 +237,11 @@ class UsageDataCollector(private val context: Context) {
     fun collect(startTime: Long, endTime: Long): UsageData {
         val usageStatsManager =
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-                ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
+                ?: return emptyUsageData()
 
         val queryStartTime = maxOf(0L, startTime - LOOKBACK_MS)
         val events = usageStatsManager.queryEvents(queryStartTime, endTime)
-            ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
+            ?: return emptyUsageData()
 
         val sessions = mutableListOf<AppSession>()
         // pkg -> the timestamp of its last ACTIVITY_RESUMED (may be before startTime)
@@ -172,17 +290,31 @@ class UsageDataCollector(private val context: Context) {
             }
         }
 
-        val uniqueApps = mergedSessions.map { it.packageName }.toSet()
-        val appCount = mergedSessions.size
-        val switchCount = maxOf(0, mergedSessions.size - 1)
+        // Keep only apps that can be scraped successfully. 404 apps are excluded.
+        val sessionsWithGenre = mergedSessions.mapNotNull { merged ->
+            val genreId = resolveGenreId(merged.packageName) ?: return@mapNotNull null
+            val normalizedGenre = if (genreId in SUPPORTED_GENRE_IDS) genreId else OTHER_GENRE_ID
+            SessionWithGenre(
+                packageName = merged.packageName,
+                durationMs = merged.durationMs,
+                genreId = normalizedGenre
+            )
+        }
 
-        val sumSec = (mergedSessions.sumOf { it.durationMs } / 1000.0).toFloat()
-        val meanSec = if (mergedSessions.isNotEmpty()) sumSec / mergedSessions.size else 0f
+        if (sessionsWithGenre.isEmpty()) {
+            return emptyUsageData()
+        }
 
-        val foregroundAppsAndDurations = mergedSessions
+        val uniqueApps = sessionsWithGenre.map { it.packageName }.toSet()
+        val appCount = sessionsWithGenre.size
+        val switchCount = maxOf(0, sessionsWithGenre.size - 1)
+
+        val sumSec = (sessionsWithGenre.sumOf { it.durationMs } / 1000.0).toFloat()
+
+        val foregroundAppsAndDurations = sessionsWithGenre
             .map { Pair(it.packageName, it.durationMs / 1000f) }
 
-        val uniqueForegroundAppsAndDurations = mergedSessions
+        val uniqueForegroundAppsAndDurations = sessionsWithGenre
             .groupBy { it.packageName }
             .map { (pkg, list) -> Pair(pkg, list.sumOf { it.durationMs / 1000.0 }.toFloat()) }
             .sortedByDescending { it.second }
@@ -193,30 +325,24 @@ class UsageDataCollector(private val context: Context) {
             0f
         }
 
-        val pm = context.packageManager
-        val categoriesMap = mutableMapOf<Int, Float>()
-        for ((pkg, duration) in uniqueForegroundAppsAndDurations) {
-            val category = try {
-                pm.getApplicationInfo(pkg, 0).category
-            } catch (e: Exception) {
-                -1 // ApplicationInfo.CATEGORY_UNDEFINED
-            }
-            categoriesMap[category] = (categoriesMap[category] ?: 0f) + duration
+        val genresMap = SUPPORTED_GENRE_IDS.associateWith { 0f }.toMutableMap()
+        for (session in sessionsWithGenre) {
+            val durationSec = session.durationMs / 1000f
+            genresMap[session.genreId] = (genresMap[session.genreId] ?: 0f) + durationSec
         }
-        val categoriesAndDurations = categoriesMap
-            .map { Pair(it.key, it.value) }
-            .sortedByDescending { it.second }
+        val genresAndDurations = SUPPORTED_GENRE_IDS.map { genreId ->
+            Pair(genreId, genresMap[genreId] ?: 0f)
+        }
 
         return UsageData(
             appSwitchCount = switchCount,
             uniqueAppsCount = uniqueApps.size,
             appCount = appCount,
             durationSumSec = sumSec,
-            durationMeanSec = meanSec,
             uniqueDurationMaxSec = uniqueDurationMaxSec,
             foregroundAppsAndDurations = foregroundAppsAndDurations,
             uniqueForegroundAppsAndDurations = uniqueForegroundAppsAndDurations,
-            categoriesAndDurations = categoriesAndDurations
+            genresAndDurations = genresAndDurations
         )
     }
 }

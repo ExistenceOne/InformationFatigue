@@ -50,11 +50,11 @@ object DataAggregator {
             foreground_app_switch_count = usageData.appSwitchCount,
             foreground_app_switch_per_hour = switchPerHour,
             foreground_app_duration_sum = usageData.durationSumSec,
-            foreground_app_duration_mean = usageData.durationMeanSec,
             unique_foreground_app_duration_max = usageData.uniqueDurationMaxSec,
             concentration_ratio = concentrationRatio,
             foreground_apps_and_durations = serializeList(usageData.foregroundAppsAndDurations),
-            unique_foreground_apps_and_durations = serializeList(usageData.uniqueForegroundAppsAndDurations)
+            unique_foreground_apps_and_durations = serializeList(usageData.uniqueForegroundAppsAndDurations),
+            genres_and_durations = serializeList(usageData.categoriesAndDurations)
         )
     }
 

@@ -26,7 +26,6 @@ class LogAdapter : ListAdapter<DataRecord, LogAdapter.LogViewHolder>(DiffCallbac
         val tvAppSwitch: TextView = view.findViewById(R.id.tvAppSwitch)
         val tvUniqueApps: TextView = view.findViewById(R.id.tvUniqueApps)
         val tvAppSwitchPerHour: TextView = view.findViewById(R.id.tvAppSwitchPerHour)
-        val tvAppDurationMean: TextView = view.findViewById(R.id.tvAppDurationMean)
         val tvConcentrationRatio: TextView = view.findViewById(R.id.tvConcentrationRatio)
     }
 
@@ -45,7 +44,6 @@ class LogAdapter : ListAdapter<DataRecord, LogAdapter.LogViewHolder>(DiffCallbac
         holder.tvAppSwitch.text = ctx.getString(R.string.app_switch_format, record.foreground_app_switch_count)
         holder.tvUniqueApps.text = ctx.getString(R.string.unique_apps_format, record.unique_foreground_app_count)
         holder.tvAppSwitchPerHour.text = ctx.getString(R.string.app_switch_per_hour_format, record.foreground_app_switch_per_hour)
-        holder.tvAppDurationMean.text = ctx.getString(R.string.app_duration_mean_format, record.foreground_app_duration_mean)
         holder.tvConcentrationRatio.text = ctx.getString(R.string.app_duration_std_format, record.concentration_ratio)
     }
 }
