@@ -4,7 +4,9 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import io.github.kdroidfilter.storekit.gplayscrapper.getGooglePlayApplicationInfo
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlin.random.Random
 /**
  * Collects app usage data using UsageStatsManager.queryEvents().
  *
@@ -131,6 +133,11 @@ class UsageDataCollector(private val context: Context) {
         )
     }
 
+    private suspend fun throttle() {
+        val delayTime = 5000L + Random.nextLong(3001)
+        delay(delayTime)
+    }
+
     private fun resolveGenreId(packageName: String): String? {
         if (appGenreCache.has(packageName)) {
             return appGenreCache.get(packageName)
@@ -138,6 +145,7 @@ class UsageDataCollector(private val context: Context) {
 
         return runBlocking {
             try {
+                throttle()
                 val appInfo = getGooglePlayApplicationInfo(
                     packageName,
                     "ko",
