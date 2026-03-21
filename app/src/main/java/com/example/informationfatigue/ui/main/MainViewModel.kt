@@ -1,12 +1,18 @@
 package com.example.informationfatigue.ui.main
 
 import android.app.Application
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.map
 import androidx.lifecycle.viewModelScope
+import com.example.informationfatigue.collector.DataAggregator
+import com.example.informationfatigue.collector.UsageDataCollector
 import com.example.informationfatigue.data.DataRecord
 import com.example.informationfatigue.data.DataRepository
+import com.example.informationfatigue.service.NotificationHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -20,8 +26,22 @@ data class TodaySummary(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = DataRepository(application)
+    private val usageCollector = UsageDataCollector(application)
+    private val notificationHelper = NotificationHelper(application)
+    private val deviceId: String =
+        Settings.Secure.getString(application.contentResolver, Settings.Secure.ANDROID_ID)
+
+    private val _isCollecting = MutableLiveData(false)
+    val isCollecting: LiveData<Boolean> = _isCollecting
+
+    private val _collectionProgress = MutableLiveData(0)
+    val collectionProgress: LiveData<Int> = _collectionProgress
+
+    private val _recentCollectedRecords = MutableLiveData<List<DataRecord>>(emptyList())
+    val recentCollectedRecords: LiveData<List<DataRecord>> = _recentCollectedRecords
 
     val allRecords: LiveData<List<DataRecord>> = repository.allRecords
+    val totalRecordCount: LiveData<Int> = allRecords.map { it.size }
 
     /** 오늘(자정 이후) 수집 기록을 연속 4시간 sleep 경계로 잘라 집계 */
     val todaySummary: LiveData<TodaySummary> = allRecords.map { allList ->
@@ -78,9 +98,68 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun collectUsageEventsSinceLastRecord() {
+        if (_isCollecting.value == true) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _isCollecting.postValue(true)
+            _collectionProgress.postValue(0)
+            notificationHelper.showProgress(0)
+
+            try {
+                val nowMs = System.currentTimeMillis()
+                val latestOffSec = repository.getLatestScreenOffUnix()
+                val startMs = if (latestOffSec != null) {
+                    latestOffSec * 1000L
+                } else {
+                    nowMs - 24L * 60L * 60L * 1000L
+                }
+
+                val sessions = usageCollector.collectScreenSessions(startMs, nowMs) { progress ->
+                    val normalized = progress.coerceIn(0, 90)
+                    _collectionProgress.postValue(normalized)
+                    notificationHelper.showProgress(normalized)
+                }
+
+                val inserted = mutableListOf<DataRecord>()
+                sessions.forEachIndexed { index, session ->
+                    val usageData = usageCollector.collect(session.startTime, session.endTime)
+                    val record = DataAggregator.aggregate(
+                        deviceId = deviceId,
+                        screenOnMs = session.startTime,
+                        screenOffMs = session.endTime,
+                        usageData = usageData
+                    )
+                    repository.insert(record)
+                    inserted.add(record)
+
+                    val insertProgress = if (sessions.isNotEmpty()) {
+                        90 + (((index + 1).toFloat() / sessions.size.toFloat()) * 10f).toInt()
+                    } else {
+                        100
+                    }
+                    val normalized = insertProgress.coerceIn(90, 100)
+                    _collectionProgress.postValue(normalized)
+                    notificationHelper.showProgress(normalized)
+                }
+
+                _recentCollectedRecords.postValue(
+                    inserted.sortedByDescending { it.screen_on_timestamp_unix }
+                )
+                _collectionProgress.postValue(100)
+                notificationHelper.showCompleted(inserted.size)
+            } catch (_: Exception) {
+                notificationHelper.showFailed()
+            } finally {
+                _isCollecting.postValue(false)
+            }
+        }
+    }
+
     fun deleteAll() {
         viewModelScope.launch {
             repository.deleteAll()
+            _recentCollectedRecords.postValue(emptyList())
         }
     }
 }

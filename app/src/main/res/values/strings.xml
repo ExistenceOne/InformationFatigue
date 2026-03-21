@@ -28,6 +28,10 @@
     <string name="service_stopped">수집 중지됨</string>
     <string name="start">수집 시작</string>
     <string name="stop">수집 중지</string>
+    <string name="start_collection">데이터 수집 시작</string>
+    <string name="collecting">수집 중...</string>
+    <string name="collection_started">수집을 시작했습니다</string>
+    <string name="collection_progress_format">%1$d%%</string>
     <string name="export_csv">CSV 내보내기</string>
     <string name="collection_log">수집 로그</string>
     <string name="no_data">수집된 데이터가 없습니다</string>
@@ -46,6 +50,10 @@
 
     <!-- Countdown & History -->
     <string name="recent_log">최근 수집 로그</string>
+    <string name="recent_count_default">최근 수집 0건</string>
+    <string name="total_count_default">전체 기록 0건</string>
+    <string name="recent_count_format">최근 수집 %1$d건</string>
+    <string name="total_count_format">전체 기록 %1$d건</string>
     <string name="all_history">전체 기록</string>
     <string name="history">기록</string>
 
@@ -54,6 +62,12 @@
     <string name="channel_description">백그라운드 데이터 수집 알림</string>
     <string name="notification_title">InformationFatigue</string>
     <string name="notification_text">데이터를 수집하고 있습니다</string>
+    <string name="notification_collecting_title">데이터 수집 진행 중</string>
+    <string name="notification_collecting_text">진행률 %1$d%%</string>
+    <string name="notification_complete_title">수집 완료</string>
+    <string name="notification_complete_text">%1$d개의 기록을 저장했습니다</string>
+    <string name="notification_failed_title">수집 실패</string>
+    <string name="notification_failed_text">다시 시도해주세요</string>
 
     <!-- CSV -->
     <string name="csv_exported">CSV 파일이 생성되었습니다</string>

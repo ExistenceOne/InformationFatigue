@@ -6,21 +6,6 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
-    <!-- Foreground service -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
-    <!-- Boot completed -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Exact alarms -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-
-    <!-- Wake lock -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-
     <!-- Notifications (API 33+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -54,26 +39,6 @@
             android:name=".ui.history.HistoryActivity"
             android:exported="false"
             android:parentActivityName=".ui.main.MainActivity" />
-
-        <!-- Data collection foreground service -->
-        <service
-            android:name=".service.DataCollectionService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- Alarm receiver -->
-        <receiver
-            android:name=".service.AlarmReceiver"
-            android:exported="false" />
-
-        <!-- Boot receiver -->
-        <receiver
-            android:name=".service.BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
 
         <!-- FileProvider for CSV sharing -->
         <provider

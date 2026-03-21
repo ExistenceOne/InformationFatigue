@@ -5,8 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.View
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,21 +18,25 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.example.informationfatigue.R
-import com.example.informationfatigue.service.DataCollectionService
 import com.example.informationfatigue.ui.history.HistoryActivity
+import com.example.informationfatigue.worker.DailyDataCollectionWorker
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.card.MaterialCardView
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var viewModel: MainViewModel
     private lateinit var logAdapter: LogAdapter
     private lateinit var recyclerView: RecyclerView
-    private lateinit var statusCard: MaterialCardView
-    private lateinit var statusDot: View
-    private lateinit var tvStatus: TextView
-    private lateinit var btnToggleService: MaterialButton
+    private lateinit var btnStartCollection: MaterialButton
+    private lateinit var progressBar: ProgressBar
+    private lateinit var tvProgressPercent: TextView
+    private lateinit var tvRecentCount: TextView
+    private lateinit var tvTotalCount: TextView
     private lateinit var btnExport: MaterialButton
     private lateinit var btnHistory: MaterialButton
     private lateinit var btnClearLogs: MaterialButton
@@ -52,11 +56,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         requestNotificationPermissionIfNeeded()
+        scheduleDailyWorker()
 
-        statusCard = findViewById(R.id.statusCard)
-        statusDot = findViewById(R.id.statusDot)
-        tvStatus = findViewById(R.id.tvStatus)
-        btnToggleService = findViewById(R.id.btnToggleService)
+        btnStartCollection = findViewById(R.id.btnStartCollection)
+        progressBar = findViewById(R.id.progressCollection)
+        tvProgressPercent = findViewById(R.id.tvProgressPercent)
+        tvRecentCount = findViewById(R.id.tvRecentCount)
+        tvTotalCount = findViewById(R.id.tvTotalCount)
         btnExport = findViewById(R.id.btnExport)
         btnHistory = findViewById(R.id.btnHistory)
         btnClearLogs = findViewById(R.id.btnClearLogs)
@@ -80,9 +86,14 @@ class MainActivity : AppCompatActivity() {
         recyclerView.adapter = logAdapter
 
         viewModel = ViewModelProvider(this)[MainViewModel::class.java]
-        viewModel.allRecords.observe(this) { records ->
+        viewModel.recentCollectedRecords.observe(this) { records ->
             logAdapter.submitList(records)
+            tvRecentCount.text = getString(R.string.recent_count_format, records.size)
             if (records.isNotEmpty()) recyclerView.scrollToPosition(0)
+        }
+
+        viewModel.totalRecordCount.observe(this) { count ->
+            tvTotalCount.text = getString(R.string.total_count_format, count)
         }
 
         viewModel.todaySummary.observe(this) { summary ->
@@ -92,16 +103,23 @@ class MainActivity : AppCompatActivity() {
             tvTodayAppSwitches.text = "${summary.totalAppSwitches}회"
         }
 
-        btnToggleService.setOnClickListener {
-            if (DataCollectionService.isRunning(this)) {
-                DataCollectionService.stop(this)
-                applyServiceUI(running = false)
-                Toast.makeText(this, R.string.service_stopped, Toast.LENGTH_SHORT).show()
+        viewModel.collectionProgress.observe(this) { progress ->
+            progressBar.progress = progress
+            tvProgressPercent.text = getString(R.string.collection_progress_format, progress)
+        }
+
+        viewModel.isCollecting.observe(this) { isCollecting ->
+            btnStartCollection.isEnabled = !isCollecting
+            btnStartCollection.text = if (isCollecting) {
+                getString(R.string.collecting)
             } else {
-                DataCollectionService.start(this)
-                applyServiceUI(running = true)
-                Toast.makeText(this, R.string.service_running, Toast.LENGTH_SHORT).show()
+                getString(R.string.start_collection)
             }
+        }
+
+        btnStartCollection.setOnClickListener {
+            viewModel.collectUsageEventsSinceLastRecord()
+            Toast.makeText(this, R.string.collection_started, Toast.LENGTH_SHORT).show()
         }
 
         btnExport.setOnClickListener {
@@ -115,7 +133,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnClearLogs.setOnClickListener {
-            val count = viewModel.allRecords.value?.size ?: 0
+            val count = viewModel.totalRecordCount.value ?: 0
             AlertDialog.Builder(this)
                 .setTitle(R.string.clear_logs_title)
                 .setMessage(getString(R.string.clear_logs_message, count))
@@ -127,25 +145,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        updateServiceStatus()
-    }
-
-    private fun applyServiceUI(running: Boolean) {
-        if (running) {
-            tvStatus.text = getString(R.string.service_running)
-            statusDot.setBackgroundResource(R.drawable.circle_green)
-            btnToggleService.text = getString(R.string.stop)
-        } else {
-            tvStatus.text = getString(R.string.service_stopped)
-            statusDot.setBackgroundResource(R.drawable.circle_red)
-            btnToggleService.text = getString(R.string.start)
-        }
-    }
-
-    private fun updateServiceStatus() {
-        applyServiceUI(DataCollectionService.isRunning(this))
+    private fun scheduleDailyWorker() {
+        val request = PeriodicWorkRequestBuilder<DailyDataCollectionWorker>(1, TimeUnit.DAYS)
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_usage_collection",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     private fun requestNotificationPermissionIfNeeded() {

@@ -13,8 +13,20 @@ class DataRepository(context: Context) {
         dao.insert(record)
     }
 
+    suspend fun insertAll(records: List<DataRecord>) {
+        dao.insertAll(records)
+    }
+
     suspend fun getAll(): List<DataRecord> {
         return dao.getAll()
+    }
+
+    suspend fun getLatestScreenOffUnix(): Long? {
+        return dao.getLatestScreenOffUnix()
+    }
+
+    suspend fun getTotalCount(): Int {
+        return dao.getTotalCount()
     }
 
     suspend fun deleteAll() {

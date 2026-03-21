@@ -18,6 +18,11 @@ import android.content.Context
  */
 class UsageDataCollector(private val context: Context) {
 
+    data class ScreenSession(
+        val startTime: Long,
+        val endTime: Long
+    )
+
     data class UsageData(
         val appSwitchCount: Int,
         val uniqueAppsCount: Int,
@@ -43,6 +48,74 @@ class UsageDataCollector(private val context: Context) {
         private const val LOOKBACK_MS = 5_000L
     }
 
+    fun collectScreenSessions(
+        startTime: Long,
+        endTime: Long,
+        onProgress: ((Int) -> Unit)? = null
+    ): List<ScreenSession> {
+        if (endTime <= startTime) {
+            onProgress?.invoke(100)
+            return emptyList()
+        }
+
+        val usageStatsManager =
+            context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+                ?: return emptyList()
+
+        val events = usageStatsManager.queryEvents(startTime, endTime) ?: return emptyList()
+        val timeline = mutableListOf<UsageEvents.Event>()
+        val reusable = UsageEvents.Event()
+
+        while (events.hasNextEvent()) {
+            events.getNextEvent(reusable)
+            timeline.add(UsageEvents.Event(reusable))
+        }
+
+        if (timeline.isEmpty()) {
+            onProgress?.invoke(100)
+            return emptyList()
+        }
+
+        timeline.sortBy { it.timeStamp }
+
+        val sessions = mutableListOf<ScreenSession>()
+        var currentStart: Long? = null
+        val total = timeline.size
+
+        for ((index, event) in timeline.withIndex()) {
+            when (event.eventType) {
+                UsageEvents.Event.SCREEN_INTERACTIVE -> {
+                    if (currentStart == null) {
+                        currentStart = event.timeStamp
+                    }
+                }
+
+                UsageEvents.Event.SCREEN_NON_INTERACTIVE,
+                UsageEvents.Event.DEVICE_SHUTDOWN,
+                UsageEvents.Event.DEVICE_STARTUP -> {
+                    val start = currentStart
+                    val end = event.timeStamp
+                    if (start != null && end > start) {
+                        sessions.add(ScreenSession(start, end))
+                    }
+                    currentStart = null
+                }
+            }
+
+            val progress = (((index + 1).toFloat() / total.toFloat()) * 100f).toInt().coerceIn(0, 100)
+            onProgress?.invoke(progress)
+        }
+
+        // Close an open session at query end if no terminating event arrived.
+        val openStart = currentStart
+        if (openStart != null && endTime > openStart) {
+            sessions.add(ScreenSession(openStart, endTime))
+        }
+
+        onProgress?.invoke(100)
+        return sessions
+    }
+
     fun collect(startTime: Long, endTime: Long): UsageData {
         val usageStatsManager =
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
@@ -54,10 +127,6 @@ class UsageDataCollector(private val context: Context) {
         val sessions = mutableListOf<AppSession>()
         // pkg -> the timestamp of its last ACTIVITY_RESUMED (may be before startTime)
         val resumedMap = mutableMapOf<String, Long>()
-        // foreground sequence within [startTime, endTime] only (for switch counting)
-        val foregroundSequence = mutableListOf<String>()
-        // the last app to receive RESUMED *before* startTime = already-in-foreground app
-        var startingApp: String? = null
 
         val event = UsageEvents.Event()
         while (events.hasNextEvent()) {
@@ -66,9 +135,6 @@ class UsageDataCollector(private val context: Context) {
             when (event.eventType) {
                 UsageEvents.Event.ACTIVITY_RESUMED -> {
                     resumedMap[pkg] = event.timeStamp
-                    if (event.timeStamp < startTime) {
-                        startingApp = pkg
-                    }
                 }
                 UsageEvents.Event.ACTIVITY_PAUSED -> {
                     val resumeTime = resumedMap.remove(pkg) ?: continue
@@ -83,10 +149,10 @@ class UsageDataCollector(private val context: Context) {
         }
 
         // Close sessions still open at endTime
-        for ((pkg, resumeTime) in resumedMap) {
+        for ((packageName, resumeTime) in resumedMap) {
             val clippedStart = maxOf(resumeTime, startTime)
             if (endTime - clippedStart >= 1000L) {
-                sessions.add(AppSession(pkg, clippedStart, endTime))
+                sessions.add(AppSession(packageName, clippedStart, endTime))
             }
         }
 
