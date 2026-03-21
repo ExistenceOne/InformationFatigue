@@ -51,7 +51,7 @@ dependencies {
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.viewpager2)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation("com.arthurivanets:google-play-scraper:1.1.2")
+    implementation("io.github.kdroidfilter:storekit-gplay-scrapper:0.9.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

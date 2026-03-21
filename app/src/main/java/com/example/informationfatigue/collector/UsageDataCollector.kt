@@ -3,10 +3,8 @@
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
-import com.arthurivanets.googleplayscraper.GooglePlayScraper
-import com.arthurivanets.googleplayscraper.HumanBehaviorRequestThrottler
-import com.arthurivanets.googleplayscraper.requests.GetAppDetailsParams
-import com.arthurivanets.googleplayscraper.util.ScraperError
+import io.github.kdroidfilter.storekit.gplayscrapper.getGooglePlayApplicationInfo
+import kotlinx.coroutines.runBlocking
 /**
  * Collects app usage data using UsageStatsManager.queryEvents().
  *
@@ -112,9 +110,6 @@ class UsageDataCollector(private val context: Context) {
         )
     }
 
-    private val scraper = GooglePlayScraper(
-        GooglePlayScraper.Config(throttler = HumanBehaviorRequestThrottler())
-    )
     private val appGenreCache = AppGenreCache(context.applicationContext)
 
     private data class SessionWithGenre(
@@ -141,29 +136,22 @@ class UsageDataCollector(private val context: Context) {
             return appGenreCache.get(packageName)
         }
 
-        val response = scraper.getAppDetails(
-            GetAppDetailsParams(
-                appId = packageName,
-                language = "KO",
-                country = "KR"
-            )
-        ).execute()
-
-        if (response.isSuccess) {
-            val resolved = response.requireResult().genreId
-                .takeIf { it.isNotBlank() }
-                ?: OTHER_GENRE_ID
-            appGenreCache.put(packageName, resolved)
-            return resolved
+        return runBlocking {
+            try {
+                val appInfo = getGooglePlayApplicationInfo(
+                    packageName,
+                    "ko",
+                    "kr"
+                )
+                val resolved = appInfo?.genreId?.takeIf { it.isNotBlank() } ?: OTHER_GENRE_ID
+                appGenreCache.put(packageName, resolved)
+                resolved
+            } catch (e: Exception) {
+                // Not found or error
+                appGenreCache.putNotTarget(packageName)
+                null
+            }
         }
-
-        val error = response.requireError()
-        if (error is ScraperError.HttpError && error.statusCode == 404) {
-            // 404 is treated as non-target app and cached to avoid repeated requests.
-            appGenreCache.putNotTarget(packageName)
-        }
-
-        return null
     }
 
     fun collectScreenSessions(
@@ -209,8 +197,7 @@ class UsageDataCollector(private val context: Context) {
                 }
 
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE,
-                UsageEvents.Event.DEVICE_SHUTDOWN,
-                UsageEvents.Event.DEVICE_STARTUP -> {
+                UsageEvents.Event.DEVICE_SHUTDOWN -> {
                     val start = currentStart
                     val end = event.timeStamp
                     if (start != null && end > start) {
