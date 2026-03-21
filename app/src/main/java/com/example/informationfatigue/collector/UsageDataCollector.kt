@@ -64,11 +64,11 @@ class UsageDataCollector(private val context: Context) {
 
         val events = usageStatsManager.queryEvents(startTime, endTime) ?: return emptyList()
         val timeline = mutableListOf<UsageEvents.Event>()
-        val reusable = UsageEvents.Event()
 
         while (events.hasNextEvent()) {
-            events.getNextEvent(reusable)
-            timeline.add(UsageEvents.Event(reusable))
+            val event = UsageEvents.Event()
+            events.getNextEvent(event)
+            timeline.add(event)
         }
 
         if (timeline.isEmpty()) {
