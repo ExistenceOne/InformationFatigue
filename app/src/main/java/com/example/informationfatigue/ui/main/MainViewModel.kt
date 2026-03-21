@@ -104,7 +104,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             _isCollecting.postValue(true)
             _collectionProgress.postValue(0)
-            notificationHelper.showProgress(0)
+            notificationHelper.showStarted()
 
             try {
                 val nowMs = System.currentTimeMillis()
@@ -118,20 +118,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val sessions = usageCollector.collectScreenSessions(startMs, nowMs) { progress ->
                     val normalized = progress.coerceIn(0, 90)
                     _collectionProgress.postValue(normalized)
-                    notificationHelper.showProgress(normalized)
                 }
 
                 val inserted = mutableListOf<DataRecord>()
                 sessions.forEachIndexed { index, session ->
                     val usageData = usageCollector.collect(session.startTime, session.endTime)
-                    val record = DataAggregator.aggregate(
-                        deviceId = deviceId,
-                        screenOnMs = session.startTime,
-                        screenOffMs = session.endTime,
-                        usageData = usageData
-                    )
-                    repository.insert(record)
-                    inserted.add(record)
+                    
+                    if (usageData.uniqueAppsCount > 0) {
+                        val record = DataAggregator.aggregate(
+                            deviceId = deviceId,
+                            screenOnMs = session.startTime,
+                            screenOffMs = session.endTime,
+                            usageData = usageData
+                        )
+                        repository.insert(record)
+                        inserted.add(record)
+                    }
 
                     val insertProgress = if (sessions.isNotEmpty()) {
                         90 + (((index + 1).toFloat() / sessions.size.toFloat()) * 10f).toInt()
@@ -140,7 +142,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     val normalized = insertProgress.coerceIn(90, 100)
                     _collectionProgress.postValue(normalized)
-                    notificationHelper.showProgress(normalized)
                 }
 
                 _recentCollectedRecords.postValue(

@@ -24,6 +24,8 @@ class DailyDataCollectionWorker(
         )
 
         return try {
+            notificationHelper.showStarted()
+            
             val nowMs = System.currentTimeMillis()
             val latestOffSec = repository.getLatestScreenOffUnix()
             val startMs = if (latestOffSec != null) {
@@ -37,14 +39,16 @@ class DailyDataCollectionWorker(
 
             sessions.forEach { session ->
                 val usageData = usageCollector.collect(session.startTime, session.endTime)
-                val record = DataAggregator.aggregate(
-                    deviceId = deviceId,
-                    screenOnMs = session.startTime,
-                    screenOffMs = session.endTime,
-                    usageData = usageData
-                )
-                repository.insert(record)
-                insertedCount += 1
+                if (usageData.uniqueAppsCount > 0) {
+                    val record = DataAggregator.aggregate(
+                        deviceId = deviceId,
+                        screenOnMs = session.startTime,
+                        screenOffMs = session.endTime,
+                        usageData = usageData
+                    )
+                    repository.insert(record)
+                    insertedCount += 1
+                }
             }
 
             notificationHelper.showCompleted(insertedCount)

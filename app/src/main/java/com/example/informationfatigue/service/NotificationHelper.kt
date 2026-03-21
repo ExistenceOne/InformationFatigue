@@ -22,13 +22,10 @@ class NotificationHelper(private val context: Context) {
         ensureChannel()
     }
 
-    fun showProgress(progress: Int) {
-        val bounded = progress.coerceIn(0, 100)
+    fun showStarted() {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(context.getString(R.string.notification_collecting_title))
-            .setContentText(context.getString(R.string.notification_collecting_text, bounded))
-            .setProgress(100, bounded, false)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
