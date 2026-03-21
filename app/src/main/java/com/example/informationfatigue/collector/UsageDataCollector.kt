@@ -121,7 +121,8 @@ class UsageDataCollector(private val context: Context) {
             context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
                 ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
 
-        val events = usageStatsManager.queryEvents(startTime - LOOKBACK_MS, endTime)
+        val queryStartTime = maxOf(0L, startTime - LOOKBACK_MS)
+        val events = usageStatsManager.queryEvents(queryStartTime, endTime)
             ?: return UsageData(0, 0, 0, 0f, 0f, 0f, emptyList(), emptyList(), emptyList())
 
         val sessions = mutableListOf<AppSession>()

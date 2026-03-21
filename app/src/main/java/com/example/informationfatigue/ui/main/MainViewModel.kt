@@ -112,7 +112,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val startMs = if (latestOffSec != null) {
                     latestOffSec * 1000L
                 } else {
-                    nowMs - 24L * 60L * 60L * 1000L
+                    0L
                 }
 
                 val sessions = usageCollector.collectScreenSessions(startMs, nowMs) { progress ->
