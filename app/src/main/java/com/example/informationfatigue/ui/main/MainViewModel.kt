@@ -117,13 +117,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val startMs = if (latestOffSec != null) {
                     latestOffSec * 1000L
                 } else {
-                    // Collect from midnight if no records exist
-                    Calendar.getInstance().apply {
-                        set(Calendar.HOUR_OF_DAY, 0)
-                        set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
+                    // At initial collection, start from 0 to collect all available history (~7 days)
+                    0L
                 }
 
                 // 1. Session discovery (roughly 5% of total work)
