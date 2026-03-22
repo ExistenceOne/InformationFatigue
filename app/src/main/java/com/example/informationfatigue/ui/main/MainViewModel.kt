@@ -2,6 +2,7 @@ package com.example.informationfatigue.ui.main
 
 import android.app.Application
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -42,6 +43,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val allRecords: LiveData<List<DataRecord>> = repository.allRecords
     val totalRecordCount: LiveData<Int> = allRecords.map { it.size }
+
+    companion object {
+        private const val TAG = "MainViewModel"
+    }
 
     /** 오늘(자정 이후) 수집 기록을 연속 4시간 sleep 경계로 잘라 집계 */
     val todaySummary: LiveData<TodaySummary> = allRecords.map { allList ->
@@ -112,17 +117,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val startMs = if (latestOffSec != null) {
                     latestOffSec * 1000L
                 } else {
-                    0L
+                    // Collect from midnight if no records exist
+                    Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
                 }
 
+                // 1. Session discovery (roughly 5% of total work)
                 val sessions = usageCollector.collectScreenSessions(startMs, nowMs) { progress ->
-                    val normalized = progress.coerceIn(0, 90)
+                    val normalized = (progress.toFloat() * 0.05f).toInt()
                     _collectionProgress.postValue(normalized)
                 }
 
+                if (sessions.isEmpty()) {
+                    _collectionProgress.postValue(100)
+                    _isCollecting.postValue(false)
+                    notificationHelper.showCompleted(0)
+                    return@launch
+                }
+
                 val inserted = mutableListOf<DataRecord>()
-                sessions.forEachIndexed { index, session ->
-                    val usageData = usageCollector.collect(session.startTime, session.endTime)
+                val totalSessions = sessions.size
+
+                // 2. Scraping and collecting data (remaining 95% of work)
+                for ((sessionIndex, session) in sessions.withIndex()) {
+                    val sessionBaseProgress = 5 + (sessionIndex.toFloat() / totalSessions * 95f)
+                    val sessionWorkWeight = 95f / totalSessions
+
+                    val usageData = usageCollector.collect(session.startTime, session.endTime) { appIndex, totalApps ->
+                        val appProgressWithinSession = if (totalApps > 0) {
+                            (appIndex.toFloat() / totalApps) * sessionWorkWeight
+                        } else {
+                            0f
+                        }
+                        val currentProgress = (sessionBaseProgress + appProgressWithinSession).toInt()
+                        _collectionProgress.postValue(currentProgress.coerceIn(0, 99))
+                    }
                     
                     if (usageData.uniqueAppsCount > 0) {
                         val record = DataAggregator.aggregate(
@@ -134,14 +167,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         repository.insert(record)
                         inserted.add(record)
                     }
-
-                    val insertProgress = if (sessions.isNotEmpty()) {
-                        90 + (((index + 1).toFloat() / sessions.size.toFloat()) * 10f).toInt()
-                    } else {
-                        100
-                    }
-                    val normalized = insertProgress.coerceIn(90, 100)
-                    _collectionProgress.postValue(normalized)
                 }
 
                 _recentCollectedRecords.postValue(
@@ -149,8 +174,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _collectionProgress.postValue(100)
                 notificationHelper.showCompleted(inserted.size)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e(TAG, "Collection stopped due to error: ${e.message}", e)
                 notificationHelper.showFailed()
+                // Partial progress is kept because successful sessions are already in DB.
+                // Next collection will start from the end of the last successful session.
             } finally {
                 _isCollecting.postValue(false)
             }

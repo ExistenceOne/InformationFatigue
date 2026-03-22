@@ -6,7 +6,6 @@ import android.content.Context
 import android.util.Log
 import io.github.kdroidfilter.storekit.gplay.scrapper.services.getGooglePlayApplicationInfo
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
 
 /**
@@ -93,28 +92,40 @@ class UsageDataCollector(private val context: Context) {
         delay(delayTime)
     }
 
-    private fun resolveGenreId(packageName: String): String? {
+    private suspend fun resolveGenreId(packageName: String): String? {
         if (appGenreCache.has(packageName)) {
             val cached = appGenreCache.get(packageName)
             Log.d(TAG, "Cache hit for $packageName: $cached")
             return cached
         }
 
-        return runBlocking {
-            try {
-                Log.d(TAG, "Scraping Play Store for $packageName...")
-                throttle()
-                val appInfo = getGooglePlayApplicationInfo(packageName, "ko", "kr")
-                val resolved = appInfo.genreId.takeIf { it.isNotBlank() } ?: OTHER_GENRE_ID
-                Log.d(TAG, "Scraped $packageName: $resolved")
-                appGenreCache.put(packageName, resolved)
-                resolved
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to scrape $packageName: ${e.message}")
+        return try {
+            Log.d(TAG, "Scraping Play Store for $packageName...")
+            throttle()
+            val appInfo = getGooglePlayApplicationInfo(packageName, "ko", "kr")
+            val resolved = appInfo.genreId.takeIf { it.isNotBlank() } ?: OTHER_GENRE_ID
+            Log.d(TAG, "Scraped $packageName: $resolved")
+            appGenreCache.put(packageName, resolved)
+            resolved
+        } catch (e: Exception) {
+            if (isNotFoundException(e)) {
+                Log.w(TAG, "App not found (404) for $packageName: ${e.message}")
                 appGenreCache.putNotTarget(packageName)
                 null
+            } else {
+                Log.e(TAG, "Scraping failed for $packageName (not 404): ${e.message}", e)
+                // Re-throw for reasons other than 404 to stop collection
+                throw e
             }
         }
+    }
+
+    private fun isNotFoundException(e: Exception): Boolean {
+        val msg = e.message ?: ""
+        // Heuristic to detect 404 errors. Ktor's ClientRequestException usually contains "404" in message.
+        return e.javaClass.simpleName.contains("ClientRequestException") && msg.contains("404") ||
+                msg.contains("404 Not Found") ||
+                msg.contains("not found", ignoreCase = true)
     }
 
     fun collectScreenSessions(
@@ -180,7 +191,11 @@ class UsageDataCollector(private val context: Context) {
         return sessions
     }
 
-    fun collect(startTime: Long, endTime: Long): UsageData {
+    suspend fun collect(
+        startTime: Long,
+        endTime: Long,
+        onAppProgress: ((Int, Int) -> Unit)? = null
+    ): UsageData {
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return emptyUsageData()
 
@@ -226,10 +241,21 @@ class UsageDataCollector(private val context: Context) {
             }
         }
 
-        val sessionsWithGenre = mergedSessions.mapNotNull { merged ->
-            val genreId = resolveGenreId(merged.packageName) ?: return@mapNotNull null
-            SessionWithGenre(merged.packageName, merged.durationMs, if (genreId in SUPPORTED_GENRE_IDS) genreId else OTHER_GENRE_ID)
+        val sessionsWithGenre = mutableListOf<SessionWithGenre>()
+        for ((index, merged) in mergedSessions.withIndex()) {
+            onAppProgress?.invoke(index, mergedSessions.size)
+            val genreId = resolveGenreId(merged.packageName)
+            if (genreId != null) {
+                sessionsWithGenre.add(
+                    SessionWithGenre(
+                        merged.packageName,
+                        merged.durationMs,
+                        if (genreId in SUPPORTED_GENRE_IDS) genreId else OTHER_GENRE_ID
+                    )
+                )
+            }
         }
+        onAppProgress?.invoke(mergedSessions.size, mergedSessions.size)
 
         if (sessionsWithGenre.isEmpty()) return emptyUsageData()
 
