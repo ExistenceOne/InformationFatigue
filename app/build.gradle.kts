@@ -6,9 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.informationfatigue"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.informationfatigue"
@@ -52,6 +50,10 @@ dependencies {
     implementation(libs.androidx.viewpager2)
     implementation(libs.androidx.work.runtime.ktx)
     implementation("io.github.kdroidfilter:storekit-gplay-scrapper:0.9.0")
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation("org.slf4j:slf4j-api:2.0.7")
+    implementation("com.github.tony19:logback-android:3.0.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
