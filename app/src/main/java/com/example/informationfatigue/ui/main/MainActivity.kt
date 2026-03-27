@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -20,6 +21,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.informationfatigue.R
 import com.example.informationfatigue.ui.history.HistoryActivity
+import com.example.informationfatigue.ui.weekly.WeeklySummaryActivity
 import com.google.android.material.button.MaterialButton
 
 class MainActivity : AppCompatActivity() {
@@ -34,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvTotalCount: TextView
     private lateinit var btnExport: MaterialButton
     private lateinit var btnHistory: MaterialButton
+    private lateinit var btnWeeklySummary: MaterialButton
     private lateinit var btnClearLogs: MaterialButton
 
     // Today summary views
@@ -41,6 +44,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvTodaySessionCount: TextView
     private lateinit var tvTodayAvgSwitchPerHour: TextView
     private lateinit var tvTodayAppSwitches: TextView
+    private lateinit var tvTodayThresholdMessage: TextView
+    private lateinit var layoutTodayStats: LinearLayout
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -59,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         tvTotalCount = findViewById(R.id.tvTotalCount)
         btnExport = findViewById(R.id.btnExport)
         btnHistory = findViewById(R.id.btnHistory)
+        btnWeeklySummary = findViewById(R.id.btnWeeklySummary)
         btnClearLogs = findViewById(R.id.btnClearLogs)
         recyclerView = findViewById(R.id.recyclerView)
 
@@ -66,6 +72,8 @@ class MainActivity : AppCompatActivity() {
         tvTodaySessionCount = findViewById(R.id.tvTodayNotifications)
         tvTodayAvgSwitchPerHour = findViewById(R.id.tvTodayNotifFreq)
         tvTodayAppSwitches = findViewById(R.id.tvTodayAppSwitches)
+        tvTodayThresholdMessage = findViewById(R.id.tvTodayThresholdMessage)
+        layoutTodayStats = findViewById(R.id.layoutTodayStats)
 
         // Edge-to-edge insets: top = status bar, bottom = nav bar
         val rootLayout = findViewById<LinearLayout>(R.id.rootLayout)
@@ -91,10 +99,23 @@ class MainActivity : AppCompatActivity() {
         }
 
         viewModel.todaySummary.observe(this) { summary ->
-            tvTodayScreenTime.text = formatDuration(summary.totalScreenTimeSec)
-            tvTodaySessionCount.text = "${summary.sessionCount}세션"
-            tvTodayAvgSwitchPerHour.text = "%.1f회/시간".format(summary.avgSwitchPerHour)
-            tvTodayAppSwitches.text = "${summary.totalAppSwitches}회"
+            if (summary.isReady) {
+                layoutTodayStats.visibility = View.VISIBLE
+                tvTodayThresholdMessage.visibility = View.GONE
+
+                tvTodayScreenTime.text = formatHourMinute(summary.avgAppUsageSec)
+                tvTodaySessionCount.text = "%.1f개".format(summary.avgUniqueAppCount)
+                tvTodayAvgSwitchPerHour.text = "%.1f회/시간".format(summary.avgSwitchPerHour)
+                tvTodayAppSwitches.text = "%.1f%%".format(summary.avgConcentrationRatio * 100f)
+            } else {
+                layoutTodayStats.visibility = View.GONE
+                tvTodayThresholdMessage.visibility = View.VISIBLE
+                tvTodayThresholdMessage.text = getString(
+                    R.string.today_threshold_message,
+                    summary.minSessionRequired,
+                    summary.sessionCount
+                )
+            }
         }
 
         viewModel.collectionProgress.observe(this) { progress ->
@@ -126,6 +147,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
 
+        btnWeeklySummary.setOnClickListener {
+            startActivity(Intent(this, WeeklySummaryActivity::class.java))
+        }
+
         btnClearLogs.setOnClickListener {
             val count = viewModel.totalRecordCount.value ?: 0
             AlertDialog.Builder(this)
@@ -150,16 +175,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun formatDuration(seconds: Long): String {
-        val hours = seconds / 3600
-        val minutes = (seconds % 3600) / 60
-        val secs = seconds % 60
-        return if (hours > 0) {
-            String.format("%dh %dm %ds", hours, minutes, secs)
-        } else if (minutes > 0) {
-            String.format("%dm %ds", minutes, secs)
-        } else {
-            String.format("%ds", secs)
-        }
+    private fun formatHourMinute(seconds: Float): String {
+        val rounded = seconds.toLong()
+        val hours = rounded / 3600L
+        val minutes = (rounded % 3600L) / 60L
+        return getString(R.string.hour_minute_format, hours, minutes)
     }
 }

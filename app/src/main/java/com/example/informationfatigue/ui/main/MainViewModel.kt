@@ -18,10 +18,13 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 data class TodaySummary(
-    val totalScreenTimeSec: Long = 0L,  // sum of screen_duration (seconds)
+    val avgAppUsageSec: Float = 0f,
     val sessionCount: Int = 0,
     val avgSwitchPerHour: Float = 0f,
-    val totalAppSwitches: Int = 0
+    val avgUniqueAppCount: Float = 0f,
+    val avgConcentrationRatio: Float = 0f,
+    val minSessionRequired: Int = 10,
+    val isReady: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,7 +51,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val TAG = "MainViewModel"
     }
 
-    /** 오늘(자정 이후) 수집 기록을 연속 4시간 sleep 경계로 잘라 집계 */
+    /** 오늘(자정 이후) 세션 평균 활동 요약 */
     val todaySummary: LiveData<TodaySummary> = allRecords.map { allList ->
         val cal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
@@ -59,40 +62,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val todayStartSec = cal.timeInMillis / 1000
         val records = allList
             .filter { it.screen_on_timestamp_unix >= todayStartSec }
-            .sortedBy { it.screen_on_timestamp_unix }
         computeTodaySummary(records)
     }
 
     private fun computeTodaySummary(records: List<DataRecord>): TodaySummary {
-        if (records.isEmpty()) return TodaySummary()
-
-        val fourHoursSec = 4 * 60 * 60L
-
-        // Find the latest "4 hour gap" boundary to define current session
-        var sessionStartIndex = 0
-        for (i in 0 until records.size - 1) {
-            val gap = records[i + 1].screen_on_timestamp_unix - records[i].screen_off_timestamp_unix
-            if (gap >= fourHoursSec) sessionStartIndex = i + 1
+        val count = records.size
+        val minSessionRequired = 10
+        if (count < minSessionRequired) {
+            return TodaySummary(
+                sessionCount = count,
+                minSessionRequired = minSessionRequired,
+                isReady = false
+            )
         }
 
-        var totalScreenTimeSec = 0L
-        var totalAppSwitches = 0
-        var switchPerHourSum = 0f
-
-        for (i in sessionStartIndex until records.size) {
-            totalScreenTimeSec += records[i].screen_duration
-            totalAppSwitches += records[i].foreground_app_switch_count
-            switchPerHourSum += records[i].foreground_app_switch_per_hour
-        }
-
-        val count = records.size - sessionStartIndex
-        val avgSwitchPerHour = if (count > 0) switchPerHourSum / count else 0f
+        val avgAppUsageSec = records.map { it.foreground_app_duration_sum }.average().toFloat()
+        val avgSwitchPerHour = records.map { it.foreground_app_switch_per_hour }.average().toFloat()
+        val avgUniqueAppCount = records.map { it.unique_foreground_app_count.toFloat() }.average().toFloat()
+        val avgConcentrationRatio = records.map { it.concentration_ratio }.average().toFloat()
 
         return TodaySummary(
-            totalScreenTimeSec = totalScreenTimeSec,
+            avgAppUsageSec = avgAppUsageSec,
             sessionCount = count,
             avgSwitchPerHour = avgSwitchPerHour,
-            totalAppSwitches = totalAppSwitches
+            avgUniqueAppCount = avgUniqueAppCount,
+            avgConcentrationRatio = avgConcentrationRatio,
+            minSessionRequired = minSessionRequired,
+            isReady = true
         )
     }
 

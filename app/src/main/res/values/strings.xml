@@ -73,11 +73,29 @@
     <string name="csv_no_data">내보낼 데이터가 없습니다</string>
     <string name="csv_share_title">데이터 내보내기</string>
 
-    <!-- Today summary card -->
+    <!-- Summary -->
     <string name="today_summary_title">오늘 활동 요약</string>
-    <string name="today_summary_note">연속 4시간 sleep 이전 기준</string>
-    <string name="today_screen_time_label">누적 스크린 타임</string>
-    <string name="today_notif_label">세션 수</string>
-    <string name="today_notif_freq_label">평균 전환/시간</string>
-    <string name="today_app_switch_label">앱 전환 횟수</string>
+    <string name="today_summary_note">스마트폰 1회 사용 평균 (최소 10세션)</string>
+    <string name="today_threshold_message">오늘 활동 요약은 최소 %1$d세션이 필요합니다. (현재 %2$d세션)</string>
+    <string name="summary_app_usage_label">앱 사용 시간</string>
+    <string name="summary_switch_per_hour_label">시간당 앱 전환</string>
+    <string name="summary_unique_app_label">고유 앱 수</string>
+    <string name="summary_concentration_label">집중도</string>
+    <string name="hour_minute_format">%1$d시간 %2$d분</string>
+
+    <string name="weekly_summary_button">주간 활동 요약</string>
+    <string name="weekly_summary_screen_title">주간 활동 요약</string>
+    <string name="weekly_summary_compare_title">이번 주 활동 요약과 저번 주 활동 요약 비교</string>
+    <string name="this_week_summary_title">이번 주 활동 요약</string>
+    <string name="last_week_summary_title">저번 주 활동 요약</string>
+    <string name="weekly_session_count_format">세션 수: %1$d개</string>
+    <string name="weekly_threshold_message">활동 요약은 최소 %1$d세션이 필요합니다. (현재 %2$d세션)</string>
+    <string name="weekly_switch_per_hour_format">%.1f회/시간</string>
+    <string name="weekly_unique_apps_format">%.1f개</string>
+    <string name="weekly_concentration_format">%.1f%%</string>
+    <string name="weekly_top_3_title">가장 많이 사용한 앱 Top 3</string>
+    <string name="weekly_top_app_label_format">%1$d위 %2$s</string>
+    <string name="weekly_top_app_count_format">%1$d회</string>
+    <string name="weekly_top_app_empty">기록된 앱 데이터가 없습니다</string>
+    <string name="weekly_top_app_icon_desc">상위 앱 아이콘</string>
 </resources>

@@ -42,6 +42,12 @@
             android:exported="false"
             android:parentActivityName=".ui.main.MainActivity" />
 
+        <!-- Weekly summary -->
+        <activity
+            android:name=".ui.weekly.WeeklySummaryActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.main.MainActivity" />
+
         <!-- FileProvider for CSV sharing -->
         <provider
             android:name="androidx.core.content.FileProvider"
