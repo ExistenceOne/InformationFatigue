@@ -142,7 +142,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val sessionBaseProgress = 5 + (sessionIndex.toFloat() / totalSessions * 95f)
                     val sessionWorkWeight = 95f / totalSessions
 
-                    val usageData = usageCollector.collect(session.startTime, session.endTime) { appIndex, totalApps ->
+                    val usageData = usageCollector.collect(session) { appIndex, totalApps ->
                         val appProgressWithinSession = if (totalApps > 0) {
                             (appIndex.toFloat() / totalApps) * sessionWorkWeight
                         } else {

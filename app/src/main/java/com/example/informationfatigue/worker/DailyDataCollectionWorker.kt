@@ -38,7 +38,7 @@ class DailyDataCollectionWorker(
             var insertedCount = 0
 
             sessions.forEach { session ->
-                val usageData = usageCollector.collect(session.startTime, session.endTime)
+                val usageData = usageCollector.collect(session)
                 if (usageData.uniqueAppsCount > 0) {
                     val record = DataAggregator.aggregate(
                         deviceId = deviceId,

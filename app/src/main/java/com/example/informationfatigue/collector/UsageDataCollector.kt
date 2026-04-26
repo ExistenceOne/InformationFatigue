@@ -15,7 +15,8 @@ class UsageDataCollector(private val context: Context) {
 
     data class ScreenSession(
         val startTime: Long,
-        val endTime: Long
+        val endTime: Long,
+        val stateSeedStartTime: Long = startTime
     )
 
     data class UsageData(
@@ -43,10 +44,29 @@ class UsageDataCollector(private val context: Context) {
         var durationMs: Long
     )
 
+    private data class PackageActiveState(
+        var activeCount: Int = 0,
+        var activeStartTime: Long? = null
+    )
+
+    private data class AppCollectionResult(
+        val sessions: List<AppSession>,
+        val resumedPackageSequence: List<String>
+    )
+
     companion object {
         private const val TAG = "UsageDataCollector"
         private const val LOOKBACK_MS = 5_000L
+        private const val AFK_TIMEOUT_MS = 30 * 60 * 1000L
+        private const val MIN_SESSION_DURATION_MS = 1_000L
         private const val OTHER_GENRE_ID = "OTHER"
+
+        private val HCI_EVENT_TYPES = setOf(
+            UsageEvents.Event.SCREEN_INTERACTIVE,
+            UsageEvents.Event.ACTIVITY_RESUMED,
+            UsageEvents.Event.USER_INTERACTION,
+            UsageEvents.Event.KEYGUARD_HIDDEN
+        )
 
         private val SUPPORTED_GENRE_IDS = listOf(
             "ART_AND_DESIGN", "AUTO_AND_VEHICLES", "ANDROID_WEAR", "BEAUTY",
@@ -128,6 +148,20 @@ class UsageDataCollector(private val context: Context) {
                 msg.contains("not found", ignoreCase = true)
     }
 
+    private fun isHciEvent(eventType: Int): Boolean = eventType in HCI_EVENT_TYPES
+
+    private fun countSwitchesWithinPackages(
+        resumedPackageSequence: List<String>,
+        allowedPackages: Set<String>
+    ): Int {
+        if (resumedPackageSequence.isEmpty() || allowedPackages.isEmpty()) return 0
+
+        val filtered = resumedPackageSequence.filter { it in allowedPackages }
+        if (filtered.size < 2) return 0
+
+        return filtered.zipWithNext().count { (prev, next) -> prev != next }
+    }
+
     fun collectScreenSessions(
         startTime: Long,
         endTime: Long,
@@ -160,30 +194,88 @@ class UsageDataCollector(private val context: Context) {
         timeline.sortBy { it.timeStamp }
 
         val sessions = mutableListOf<ScreenSession>()
+        var isScreenInteractive = false
         var currentStart: Long? = null
+        var stateSeedStart: Long? = null
+        var lastHciAt: Long? = null
+        var isAfkPaused = false
         val total = timeline.size
 
+        fun addScreenSessionIfValid(sessionStart: Long?, sessionEnd: Long, seedStart: Long?) {
+            if (sessionStart == null || seedStart == null) return
+            if (sessionEnd <= sessionStart) return
+            sessions.add(
+                ScreenSession(
+                    startTime = sessionStart,
+                    endTime = sessionEnd,
+                    stateSeedStartTime = seedStart
+                )
+            )
+        }
+
+        fun pauseForAfkIfNeeded(now: Long) {
+            if (!isScreenInteractive || isAfkPaused) return
+            val lastHci = lastHciAt ?: return
+            val afkStart = lastHci + AFK_TIMEOUT_MS
+            if (now >= afkStart) {
+                addScreenSessionIfValid(currentStart, afkStart, stateSeedStart)
+                currentStart = null
+                isAfkPaused = true
+            }
+        }
+
         for ((index, event) in timeline.withIndex()) {
+            pauseForAfkIfNeeded(event.timeStamp)
+
             when (event.eventType) {
                 UsageEvents.Event.SCREEN_INTERACTIVE -> {
-                    if (currentStart == null) currentStart = event.timeStamp
+                    if (!isScreenInteractive) {
+                        isScreenInteractive = true
+                        currentStart = event.timeStamp
+                        stateSeedStart = event.timeStamp
+                    } else if (isAfkPaused) {
+                        currentStart = event.timeStamp
+                        isAfkPaused = false
+                    } else if (currentStart == null) {
+                        currentStart = event.timeStamp
+                    }
+                    lastHciAt = event.timeStamp
                 }
                 UsageEvents.Event.SCREEN_NON_INTERACTIVE,
                 UsageEvents.Event.DEVICE_SHUTDOWN -> {
-                    val start = currentStart
-                    val end = event.timeStamp
-                    if (start != null && end > start) {
-                        sessions.add(ScreenSession(start, end))
+                    if (isScreenInteractive && !isAfkPaused) {
+                        addScreenSessionIfValid(currentStart, event.timeStamp, stateSeedStart)
                     }
+                    isScreenInteractive = false
                     currentStart = null
+                    stateSeedStart = null
+                    lastHciAt = null
+                    isAfkPaused = false
+                }
+                else -> {
+                    if (isHciEvent(event.eventType)) {
+                        if (isAfkPaused) {
+                            currentStart = event.timeStamp
+                            isAfkPaused = false
+                        } else if (isScreenInteractive && currentStart == null) {
+                            currentStart = event.timeStamp
+                        }
+
+                        // While not AFK, ScreenSession starts only at SCREEN_INTERACTIVE.
+                        if (isScreenInteractive) {
+                            lastHciAt = event.timeStamp
+                        }
+                    }
                 }
             }
             onProgress?.invoke((((index + 1).toFloat() / total) * 100f).toInt().coerceIn(0, 100))
         }
 
+        pauseForAfkIfNeeded(endTime)
+
         val openStart = currentStart
-        if (openStart != null && endTime > openStart) {
-            sessions.add(ScreenSession(openStart, endTime))
+        if (isScreenInteractive && !isAfkPaused && openStart != null && endTime > openStart) {
+            addScreenSessionIfValid(openStart, endTime, stateSeedStart)
         }
 
         Log.d(TAG, "Found ${sessions.size} screen sessions.")
@@ -192,44 +284,52 @@ class UsageDataCollector(private val context: Context) {
     }
 
     suspend fun collect(
+        session: ScreenSession,
+        onAppProgress: ((Int, Int) -> Unit)? = null
+    ): UsageData {
+        return collectInternal(
+            startTime = session.startTime,
+            endTime = session.endTime,
+            stateSeedStartTime = session.stateSeedStartTime,
+            onAppProgress = onAppProgress
+        )
+    }
+
+    suspend fun collect(
         startTime: Long,
         endTime: Long,
         onAppProgress: ((Int, Int) -> Unit)? = null
     ): UsageData {
+        return collectInternal(
+            startTime = startTime,
+            endTime = endTime,
+            stateSeedStartTime = startTime,
+            onAppProgress = onAppProgress
+        )
+    }
+
+    private suspend fun collectInternal(
+        startTime: Long,
+        endTime: Long,
+        stateSeedStartTime: Long,
+        onAppProgress: ((Int, Int) -> Unit)? = null
+    ): UsageData {
+        if (endTime <= startTime) return emptyUsageData()
+
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
             ?: return emptyUsageData()
 
-        val queryStartTime = maxOf(0L, startTime - LOOKBACK_MS)
+        val normalizedSeed = minOf(stateSeedStartTime, startTime)
+        val queryStartTime = maxOf(0L, normalizedSeed - LOOKBACK_MS)
         val events = usageStatsManager.queryEvents(queryStartTime, endTime) ?: return emptyUsageData()
 
-        val sessions = mutableListOf<AppSession>()
-        val resumedMap = mutableMapOf<String, Long>()
+        val appCollectionResult = collectAppSessions(
+            events = events,
+            startTime = startTime,
+            endTime = endTime
+        )
 
-        val event = UsageEvents.Event()
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            val pkg = event.packageName ?: continue
-            when (event.eventType) {
-                UsageEvents.Event.ACTIVITY_RESUMED -> resumedMap[pkg] = event.timeStamp
-                UsageEvents.Event.ACTIVITY_PAUSED -> {
-                    val resumeTime = resumedMap.remove(pkg) ?: continue
-                    val clippedStart = maxOf(resumeTime, startTime)
-                    val clippedEnd = minOf(event.timeStamp, endTime)
-                    if (clippedEnd - clippedStart >= 1000L) {
-                        sessions.add(AppSession(pkg, clippedStart, clippedEnd))
-                    }
-                }
-            }
-        }
-
-        for ((packageName, resumeTime) in resumedMap) {
-            val clippedStart = maxOf(resumeTime, startTime)
-            if (endTime - clippedStart >= 1000L) {
-                sessions.add(AppSession(packageName, clippedStart, endTime))
-            }
-        }
-
-        val sortedSessions = sessions.sortedBy { it.startTime }
+        val sortedSessions = appCollectionResult.sessions.sortedBy { it.startTime }
         val mergedSessions = mutableListOf<MergedSession>()
 
         for (session in sortedSessions) {
@@ -259,6 +359,12 @@ class UsageDataCollector(private val context: Context) {
 
         if (sessionsWithGenre.isEmpty()) return emptyUsageData()
 
+        val playStoreQueryablePackages = sessionsWithGenre.map { it.packageName }.toSet()
+        val playStoreSwitchCount = countSwitchesWithinPackages(
+            resumedPackageSequence = appCollectionResult.resumedPackageSequence,
+            allowedPackages = playStoreQueryablePackages
+        )
+
         val uniqueApps = sessionsWithGenre.map { it.packageName }.toSet()
         val sumSec = (sessionsWithGenre.sumOf { it.durationMs } / 1000.0).toFloat()
         val foregroundAppsAndDurations = sessionsWithGenre.map { it.packageName to it.durationMs / 1000f }
@@ -272,7 +378,7 @@ class UsageDataCollector(private val context: Context) {
         }
 
         return UsageData(
-            appSwitchCount = maxOf(0, sessionsWithGenre.size - 1),
+            appSwitchCount = playStoreSwitchCount,
             uniqueAppsCount = uniqueApps.size,
             appCount = sessionsWithGenre.size,
             durationSumSec = sumSec,
@@ -280,6 +386,69 @@ class UsageDataCollector(private val context: Context) {
             foregroundAppsAndDurations = foregroundAppsAndDurations,
             uniqueForegroundAppsAndDurations = uniqueForegroundAppsAndDurations,
             genresAndDurations = SUPPORTED_GENRE_IDS.map { it to (genresMap[it] ?: 0f) }
+        )
+    }
+
+    private fun collectAppSessions(
+        events: UsageEvents,
+        startTime: Long,
+        endTime: Long
+    ): AppCollectionResult {
+        val sessions = mutableListOf<AppSession>()
+        val packageStates = mutableMapOf<String, PackageActiveState>()
+        val resumedPackageSequence = mutableListOf<String>()
+        var lastResumedPackage: String? = null
+
+        val event = UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg = event.packageName ?: continue
+            when (event.eventType) {
+                UsageEvents.Event.ACTIVITY_RESUMED -> {
+                    if (event.timeStamp >= startTime) {
+                        if (lastResumedPackage != pkg) {
+                            resumedPackageSequence.add(pkg)
+                        }
+                    }
+                    lastResumedPackage = pkg
+
+                    val state = packageStates.getOrPut(pkg) { PackageActiveState() }
+                    if (state.activeCount == 0) {
+                        state.activeStartTime = event.timeStamp
+                    }
+                    state.activeCount += 1
+                }
+                UsageEvents.Event.ACTIVITY_STOPPED -> {
+                    val state = packageStates[pkg] ?: continue
+                    if (state.activeCount <= 0) continue
+
+                    state.activeCount -= 1
+                    if (state.activeCount == 0) {
+                        val activeStart = state.activeStartTime ?: continue
+                        val clippedStart = maxOf(activeStart, startTime)
+                        val clippedEnd = minOf(event.timeStamp, endTime)
+                        if (clippedEnd - clippedStart >= MIN_SESSION_DURATION_MS) {
+                            sessions.add(AppSession(pkg, clippedStart, clippedEnd))
+                        }
+                        state.activeStartTime = null
+                    }
+                }
+            }
+        }
+
+        for ((packageName, state) in packageStates) {
+            val activeStart = state.activeStartTime ?: continue
+            if (state.activeCount > 0) {
+                val clippedStart = maxOf(activeStart, startTime)
+                if (endTime - clippedStart >= MIN_SESSION_DURATION_MS) {
+                    sessions.add(AppSession(packageName, clippedStart, endTime))
+                }
+            }
+        }
+
+        return AppCollectionResult(
+            sessions = sessions,
+            resumedPackageSequence = resumedPackageSequence
         )
     }
 }
